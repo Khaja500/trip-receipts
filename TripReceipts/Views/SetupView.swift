@@ -16,6 +16,7 @@ struct SetupView: View {
     @AppStorage(InvoiceParseClient.serverKey) private var parserServer = ""
     @State private var parserStatus: (ok: Bool, text: String)?
     @State private var checkingParser = false
+    @FocusState private var editingParser: Bool
 
     /// One automation per keyword — between them they catch the wording every
     /// Indian bank uses for an outgoing payment.
@@ -33,6 +34,7 @@ struct SetupView: View {
                 aboutSection
             }
             .navigationTitle("Setup")
+            .scrollDismissesKeyboard(.interactively)
             .task { await refreshNotificationStatus() }
         }
     }
@@ -125,14 +127,22 @@ struct SetupView: View {
 
     private var parserSection: some View {
         Section {
-            LabeledContent("Parser server") {
-                TextField("https://… or 127.0.0.1:8787", text: $parserServer)
-                    .multilineTextAlignment(.trailing)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Parser server address")
+                    .font(.subheadline.weight(.medium))
+                TextField("e.g. 192.168.1.20:8787", text: $parserServer)
+                    .textFieldStyle(.roundedBorder)
                     .keyboardType(.URL)
+                    .textContentType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { Task { await checkParser() } }
                     .onChange(of: parserServer) { _, _ in parserStatus = nil }
+                    .focused($editingParser)
+                    .accessibilityIdentifier("parserServerField")
             }
+            .padding(.vertical, 4)
 
             Button {
                 Task { await checkParser() }
@@ -144,6 +154,7 @@ struct SetupView: View {
                 }
             }
             .disabled(InvoiceParseClient.serverURL(from: parserServer) == nil || checkingParser)
+            .accessibilityIdentifier("checkParserButton")
 
             if !parserServer.trimmingCharacters(in: .whitespaces).isEmpty
                 && InvoiceParseClient.serverURL(from: parserServer) == nil {
@@ -151,6 +162,7 @@ struct SetupView: View {
                       + "or https://parser.example.com", systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.orange)
+                    .accessibilityIdentifier("parserAddressHint")
             }
 
             if let parserStatus {
@@ -158,6 +170,7 @@ struct SetupView: View {
                       systemImage: parserStatus.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(parserStatus.ok ? .green : .orange)
+                    .accessibilityIdentifier("parserStatus")
             }
         } header: {
             Text("Receipt check")
@@ -296,6 +309,7 @@ struct SetupView: View {
     // MARK: - Actions
 
     private func checkParser() async {
+        editingParser = false  // so the result isn't hidden under the keyboard
         guard let client = InvoiceParseClient.configured() else {
             parserStatus = (false, "Enter the parser's address first.")
             return
