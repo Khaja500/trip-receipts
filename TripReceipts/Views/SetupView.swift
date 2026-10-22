@@ -278,11 +278,19 @@ struct SetupView: View {
 
     private var aboutSection: some View {
         Section {
-            LabeledContent("Version", value: "1.0")
+            LabeledContent("Version", value: Self.version)
         } footer: {
             Text("Trip Receipts catches work-travel payments as they happen, so a claim "
                  + "is an export rather than an archaeology project.")
         }
+    }
+
+    /// "1.0 (2)" — the build number tells which install is actually running.
+    private static var version: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
     }
 
     // MARK: - Actions
