@@ -4,7 +4,7 @@ import CryptoKit
 
 /// What the website sees: every payment and trip on the phone as plain
 /// values, written to one JSON file. Receipt images stay on the phone — only
-/// their names and the total read from them go up.
+/// their names, the total read from them and the result of their check go up.
 ///
 /// Dates encode as ISO 8601 to the second, the same stamp `ProofHasher`
 /// signs, so the website can recompute each fingerprint from the text it is
@@ -51,6 +51,29 @@ struct SyncSnapshot: Codable, Equatable {
         var isPDF: Bool
         var addedAt: Date
         var ocrTotal: Double?
+        /// Absent for receipts attached before checking existed.
+        var verification: VerificationRecord?
+    }
+
+    /// The receipt check as the phone last ran it. The website shows it as
+    /// is rather than comparing again, so both always agree.
+    struct VerificationRecord: Codable, Equatable {
+        var status: String
+        var amount: String
+        var time: String
+        var merchant: String
+        var source: String
+        var parsedTotal: Double?
+        var parsedCurrency: String?
+        var parsedDate: String?
+        var parsedTime: String?
+        var parsedMerchant: String?
+        var invoiceNumber: String?
+        var overridden: Bool
+        var note: String
+        /// What differs, or what was let through — one sentence.
+        var summary: String
+        var fallbackReason: String?
     }
 
     struct TripRecord: Codable, Equatable {
@@ -127,12 +150,36 @@ extension SyncSnapshot.PaymentRecord {
             receipts: p.receipts
                 .sorted { $0.addedAt < $1.addedAt }
                 .map { SyncSnapshot.ReceiptRecord(filename: $0.filename, isPDF: $0.isPDF,
-                                                  addedAt: $0.addedAt, ocrTotal: $0.ocrTotal) },
+                                                  addedAt: $0.addedAt, ocrTotal: $0.ocrTotal,
+                                                  verification: $0.verification.map { .init($0, payment: p) }) },
             rawMessage: p.rawMessage,
             sender: p.sender,
             receivedAt: p.receivedAt,
             messageHash: p.messageHash,
             additionalMessages: p.additionalMessages
+        )
+    }
+}
+
+extension SyncSnapshot.VerificationRecord {
+    init(_ v: ReceiptVerification, payment: Payment) {
+        let invoice = v.invoice
+        self.init(
+            status: v.statusRaw,
+            amount: v.amountResultRaw,
+            time: v.timeResultRaw,
+            merchant: v.merchantResultRaw,
+            source: v.sourceRaw,
+            parsedTotal: invoice.total,
+            parsedCurrency: invoice.currency,
+            parsedDate: invoice.invoiceDate,
+            parsedTime: invoice.invoiceTime,
+            parsedMerchant: invoice.merchant,
+            invoiceNumber: invoice.invoiceNumber,
+            overridden: v.overriddenByUser,
+            note: v.userNote,
+            summary: v.result(for: payment).summary,
+            fallbackReason: v.fallbackReason
         )
     }
 }

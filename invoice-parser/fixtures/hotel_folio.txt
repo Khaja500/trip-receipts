@@ -1,0 +1,23 @@
+HOTEL SEA PRINCESS
+Juhu Tara Road, Juhu, Mumbai 400049
+GSTIN: 27AAACS1234F1Z5
+TAX INVOICE
+Folio No: F-20931
+Guest Name: Arjun Mehta
+Arrival: 12/10/2025 14:05
+Departure: 15/10/2025 11:30
+Room No: 512 Nights: 3
+Bill Date: 15/10/2025
+Date Description Amount
+12/10/2025 Room Charges 3,000.00
+13/10/2025 Room Charges 3,000.00
+14/10/2025 Room Charges 3,000.00
+13/10/2025 Restaurant 420.00
+Sub Total 9,420.00
+CGST @ 6% 222.00
+SGST @ 6% 222.00
+Rounding 6.00
+Grand Total 9,870.00
+Less: Advance received 5,000.00
+Balance Payable 4,870.00
+-- Test fixture for invoice-parser: invented data, not a real receipt --

@@ -203,6 +203,46 @@ struct PaymentStore {
         }
     }
 
+    // MARK: - Receipts
+
+    /// Files a receipt with its check. A receipt answers a waiting payment's
+    /// question — unless it disagrees with the payment, and then the payment
+    /// waits for "Add to trip anyway" or a better receipt.
+    @discardableResult
+    func attachReceipt(
+        _ data: Data, isPDF: Bool, filename: String, check: ReceiptCheck.Outcome, to payment: Payment
+    ) -> ReceiptVerification {
+        let receipt = ReceiptFile(data: data, isPDF: isPDF, filename: filename,
+                                  ocrText: check.reading.text, ocrTotal: check.reading.total)
+        receipt.payment = payment
+        context.insert(receipt)
+
+        let verification = ReceiptVerification(invoice: check.invoice, source: check.source,
+                                               fallbackReason: check.fallbackReason)
+        context.insert(verification)
+        receipt.verification = verification
+        verification.refresh(against: payment)
+
+        if payment.status == .pending && verification.status != .warning {
+            markWork(payment)
+        } else {
+            try? context.save()
+        }
+        return verification
+    }
+
+    /// "Add to trip anyway": the receipt stays, the payment is filed, and the
+    /// choice — with any note — travels into the proof and the export.
+    func addAnyway(_ verification: ReceiptVerification, note: String, payment: Payment) {
+        verification.overriddenByUser = true
+        verification.userNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if payment.status == .work {
+            try? context.save()
+        } else {
+            markWork(payment)
+        }
+    }
+
     // MARK: - Trips
 
     func tripCovering(_ date: Date) -> Trip? {

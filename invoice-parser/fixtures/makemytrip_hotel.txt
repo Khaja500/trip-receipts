@@ -1,0 +1,12 @@
+MakeMyTrip
+Booking ID: NH7812345678901
+Booked on: Sat, 11 Oct 2025, 10:15 PM
+Hotel: Lemon Tree Premier, Pune
+Check-in: Sun, 19 Oct 2025
+Check-out: Tue, 21 Oct 2025
+2 Nights, 1 Room
+Total Amount Paid
+₹ 6,240
+Includes taxes and fees
+MakeMyTrip (India) Private Limited
+-- Test fixture for invoice-parser: invented data, not a real receipt --

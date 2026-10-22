@@ -56,6 +56,7 @@ const ICONS = {
   clip: '<path d="m20 11.5-8.2 8.2a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/>',
   alert: '<path d="M12 3.5 2.5 20h19zM12 10v4M12 17h.01"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  dashed: '<circle cx="12" cy="12" r="8" stroke-dasharray="3.2 3"/>',
   cross: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
   shield: '<path d="M12 3 4.5 6v6c0 4.5 3.2 7.8 7.5 9 4.3-1.2 7.5-4.5 7.5-9V6z"/><path d="m8.8 12.2 2.3 2.3 4.3-4.6"/>',
   inbox: '<path d="M3 13h5l1.5 2.5h5L16 13h5M5.5 5h13L21 13v6H3v-6z"/>',
@@ -598,7 +599,7 @@ function paymentRow(p, kind) {
   const side = [amountFor(p, kind === 'expenses')];
   if (kind === 'expenses') {
     side.push(p.receipts.length
-      ? tag(String(p.receipts.length), 'ok', 'clip')
+      ? checkTag(paymentCheck(p)) || tag(String(p.receipts.length), 'ok', 'clip')
       : tag('No receipt', 'missing', 'alert'));
   } else if (kind === 'all') {
     const status = STATUS[p.status] || STATUS.pending;
@@ -655,8 +656,10 @@ function expensesPanel() {
   if (state.expenseTrip) shown = shown.filter((p) => p.tripID === state.expenseTrip);
   if (state.expenseFilter === 'missing') shown = shown.filter((p) => !p.receipts.length);
   if (state.expenseFilter === 'unfiled') shown = shown.filter((p) => !p.tripID || !v.tripsById.has(p.tripID));
+  if (state.expenseFilter === 'warnings') shown = shown.filter((p) => paymentCheck(p)?.status === 'warning');
 
   const missingCount = v.work.filter((p) => !p.receipts.length).length;
+  const warningCount = v.work.filter((p) => paymentCheck(p)?.status === 'warning').length;
   const tripSelect = h('select', {
     class: 'select', 'aria-label': 'Trip',
     onchange: (e) => { state.expenseTrip = e.target.value; renderPanel(); },
@@ -665,7 +668,8 @@ function expensesPanel() {
   v.trips.map((t) => h('option', { value: t.id, selected: t.id === state.expenseTrip }, t.name)));
 
   const head = h('div', { class: 'panel-head' },
-    chips([['all', 'All'], ['missing', `Missing receipt${missingCount ? ` · ${missingCount}` : ''}`], ['unfiled', 'Not in a trip']],
+    chips([['all', 'All'], ['missing', `Missing receipt${missingCount ? ` · ${missingCount}` : ''}`],
+      ...(warningCount ? [['warnings', `Receipt doesn’t match · ${warningCount}`]] : []), ['unfiled', 'Not in a trip']],
       state.expenseFilter, (value) => { state.expenseFilter = value; renderPanel(); }),
     h('div', { class: 'toolbar' }, v.trips.length > 0 && tripSelect,
       shown.length > 0 && h('button', {
@@ -861,7 +865,46 @@ function renderDetail() {
   dialog.scrollTop = scroll;
 }
 
+/**
+ * The receipt check that speaks for a payment, as the phone ran it: a
+ * matching receipt settles it; otherwise a warning outranks "unverified".
+ * The site shows the phone's verdict rather than comparing again.
+ */
+function paymentCheck(p) {
+  const checks = p.receipts.map((r) => r.verification).filter(Boolean);
+  return checks.find((c) => c.status === 'matched')
+    || checks.find((c) => c.status === 'warning')
+    || checks[0] || null;
+}
+
+function checkTag(check) {
+  if (!check) return null;
+  if (check.status === 'matched') return tag('Verified', 'ok', 'check');
+  if (check.status === 'warning') return tag(check.overridden ? 'Added anyway' : 'Doesn’t match', 'missing', 'alert');
+  return tag('Unverified', '', 'dashed');
+}
+
 function receiptLine(r, p) {
+  const v = r.verification;
+  if (v) {
+    const read = [
+      typeof v.parsedTotal === 'number' && `total ${money(v.parsedTotal, v.parsedCurrency || p.currency)}`,
+      v.parsedDate && `dated ${dayText(new Date(`${v.parsedDate}T${v.parsedTime || '12:00'}`))}`,
+      v.parsedMerchant && `from ${v.parsedMerchant}`,
+    ].filter(Boolean).join(', ');
+    const lines = [
+      v.summary,
+      read && `${v.source === 'online' ? 'Parser read' : 'Read on the phone'}: ${read}.`,
+      v.source !== 'online' && v.fallbackReason,
+      v.overridden && (v.note ? `Added to the trip anyway: “${v.note}”` : 'Added to the trip anyway.'),
+    ].filter(Boolean);
+    return h('div', { class: 'receipt' },
+      icon(r.isPDF ? 'visaForex' : 'clip'),
+      h('div', { class: 'grow' }, r.filename,
+        h('small', null, `Added ${dayText(new Date(r.addedAt))} · kept on the phone`),
+        lines.map((line, i) => h('small', { class: i === 0 && v.status === 'warning' ? 'warn-text' : '' }, line))),
+      checkTag(v));
+  }
   let check = null;
   if (typeof r.ocrTotal === 'number' && p.amount > 0) {
     const matches = Math.abs(r.ocrTotal - p.amount) / p.amount <= 0.01;
@@ -919,6 +962,12 @@ function csvField(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function checkColumns(check) {
+  if (!check) return ['', '', '', '', ''];
+  return [check.status, typeof check.parsedTotal === 'number' ? check.parsedTotal.toFixed(2) : '',
+    [check.parsedDate, check.parsedTime].filter(Boolean).join(' '), check.overridden ? 'yes' : 'no', check.note || ''];
+}
+
 /** The same columns as the claim pack the phone exports. */
 function downloadCSV(payments, name) {
   const isoDay = (iso) => {
@@ -928,12 +977,14 @@ function downloadCSV(payments, name) {
   const fixed = (n) => Number(n || 0).toFixed(2);
   const rows = [
     ['Date', 'Payee', 'Category', 'Trip', 'Currency', 'Amount', 'Claimed', 'Refunded', 'Net claimed', 'Paid by',
-      'Bank', 'Reference', 'Receipts', 'Notes', 'Original message', 'Proof SHA-256'],
+      'Bank', 'Reference', 'Receipts', 'Notes', 'Original message', 'Proof SHA-256',
+      'verification_status', 'parsed_total', 'parsed_date', 'overridden', 'note'],
     ...[...payments].sort((a, b) => new Date(a.paidAt) - new Date(b.paidAt)).map((p) => [
       isoDay(p.paidAt), p.merchant, categoryTitle(p.category), state.view.tripsById.get(p.tripID)?.name || '',
       p.currency, fixed(p.amount), fixed(p.claimableAmount), fixed(p.refundedAmount), fixed(p.netClaimable),
       p.instrument, p.bank || '', p.reference || '', p.receipts.length, p.notes,
       p.isManual ? '(entered manually)' : p.rawMessage, p.messageHash,
+      ...checkColumns(paymentCheck(p)),
     ]),
   ];
   const csv = rows.map((row) => row.map(csvField).join(',')).join('\r\n');

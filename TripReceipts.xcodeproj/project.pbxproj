@@ -238,7 +238,9 @@
 				DEVELOPMENT_TEAM = HR3C72RA2R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "TripReceipts-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Trip Receipts";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reaches the receipt parser running on your own network.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scanning a bill keeps the receipt with the payment.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pick a screenshot or photo of a bill to attach to a payment.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -269,7 +271,9 @@
 				DEVELOPMENT_TEAM = HR3C72RA2R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "TripReceipts-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Trip Receipts";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reaches the receipt parser running on your own network.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scanning a bill keeps the receipt with the payment.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pick a screenshot or photo of a bill to attach to a payment.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

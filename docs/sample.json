@@ -100,7 +100,24 @@
           "addedAt": "2026-10-19T05:50:00Z",
           "filename": "VFS-appointment.pdf",
           "isPDF": true,
-          "ocrTotal": 3200
+          "ocrTotal": 3020,
+          "verification": {
+            "amount": "close",
+            "fallbackReason": null,
+            "invoiceNumber": "VFS/BLR/88213",
+            "merchant": "match",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-10-19",
+            "parsedMerchant": "VFS Global",
+            "parsedTime": "11:20",
+            "parsedTotal": 3020,
+            "source": "online",
+            "status": "matched",
+            "summary": "Payment is ₹180 (6%) more than the invoice — tip, round-off or a fee",
+            "time": "match"
+          }
         }
       ],
       "receivedAt": "2026-10-19T05:50:00Z",
@@ -166,7 +183,24 @@
           "addedAt": "2026-10-16T12:55:00Z",
           "filename": "uber-airport.jpg",
           "isPDF": false,
-          "ocrTotal": 530
+          "ocrTotal": 530,
+          "verification": {
+            "amount": "match",
+            "fallbackReason": null,
+            "invoiceNumber": null,
+            "merchant": "match",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-10-13",
+            "parsedMerchant": "Uber",
+            "parsedTime": "18:25",
+            "parsedTotal": 530,
+            "source": "online",
+            "status": "warning",
+            "summary": "Invoice dated 13 Oct vs payment 16 Oct",
+            "time": "mismatch"
+          }
         }
       ],
       "receivedAt": "2026-10-16T12:55:00Z",
@@ -277,7 +311,24 @@
           "addedAt": "2026-10-13T09:00:00Z",
           "filename": "OYO-invoice.pdf",
           "isPDF": true,
-          "ocrTotal": 4820
+          "ocrTotal": 4320,
+          "verification": {
+            "amount": "mismatch",
+            "fallbackReason": null,
+            "invoiceNumber": "OYO-HYD-551908",
+            "merchant": "match",
+            "note": "Late checkout charge paid at the desk",
+            "overridden": true,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-10-13",
+            "parsedMerchant": "OYO",
+            "parsedTime": "14:30",
+            "parsedTotal": 4320,
+            "source": "online",
+            "status": "warning",
+            "summary": "Invoice total ₹4,320 vs payment ₹4,820",
+            "time": "match"
+          }
         }
       ],
       "receivedAt": "2026-10-13T09:00:00Z",
@@ -317,7 +368,24 @@
           "addedAt": "2026-10-13T03:12:00Z",
           "filename": "uber-pnq.jpg",
           "isPDF": false,
-          "ocrTotal": 486
+          "ocrTotal": 486,
+          "verification": {
+            "amount": "match",
+            "fallbackReason": null,
+            "invoiceNumber": null,
+            "merchant": "match",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-10-13",
+            "parsedMerchant": "Uber",
+            "parsedTime": "08:42",
+            "parsedTotal": 486,
+            "source": "online",
+            "status": "matched",
+            "summary": "",
+            "time": "match"
+          }
         }
       ],
       "receivedAt": "2026-10-13T03:12:00Z",
@@ -350,7 +418,24 @@
           "addedAt": "2026-10-10T16:46:00Z",
           "filename": "IndiGo-BLR-PNQ.pdf",
           "isPDF": true,
-          "ocrTotal": 6240
+          "ocrTotal": 6240,
+          "verification": {
+            "amount": "match",
+            "fallbackReason": null,
+            "invoiceNumber": "K7XQ2M",
+            "merchant": "match",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-10-10",
+            "parsedMerchant": "IndiGo",
+            "parsedTime": "22:16",
+            "parsedTotal": 6240,
+            "source": "online",
+            "status": "matched",
+            "summary": "",
+            "time": "match"
+          }
         }
       ],
       "receivedAt": "2026-10-10T16:46:00Z",
@@ -461,7 +546,24 @@
           "addedAt": "2026-09-20T06:32:00Z",
           "filename": "MMT-hotel-voucher.pdf",
           "isPDF": true,
-          "ocrTotal": 9870
+          "ocrTotal": 9870,
+          "verification": {
+            "amount": "match",
+            "fallbackReason": "Couldn't reach the parser server.",
+            "invoiceNumber": null,
+            "merchant": "unread",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-09-20",
+            "parsedMerchant": null,
+            "parsedTime": null,
+            "parsedTotal": 9870,
+            "source": "on-device",
+            "status": "unverified",
+            "summary": "No date found on the invoice; no merchant name found on the invoice",
+            "time": "unread"
+          }
         }
       ],
       "receivedAt": "2026-09-20T06:32:00Z",
@@ -494,7 +596,24 @@
           "addedAt": "2026-09-18T05:01:00Z",
           "filename": "IRCTC-ticket.pdf",
           "isPDF": true,
-          "ocrTotal": 2145
+          "ocrTotal": 2145,
+          "verification": {
+            "amount": "match",
+            "fallbackReason": null,
+            "invoiceNumber": "4521367890",
+            "merchant": "match",
+            "note": "",
+            "overridden": false,
+            "parsedCurrency": "INR",
+            "parsedDate": "2026-09-18",
+            "parsedMerchant": "IRCTC",
+            "parsedTime": "10:31",
+            "parsedTotal": 2145,
+            "source": "online",
+            "status": "matched",
+            "summary": "",
+            "time": "match"
+          }
         }
       ],
       "receivedAt": "2026-09-18T05:01:00Z",

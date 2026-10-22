@@ -1,0 +1,21 @@
+Uber
+Thanks for riding, Arjun
+12 October 2025, 9:41 am
+
+Total ₹486.00
+
+Trip fare ₹455.50
+Subtotal ₹455.50
+Booking fee ₹7.36
+Taxes ₹23.14
+
+Payments
+UPI Scan & Pay ₹486.00
+12/10/25 9:41 am
+
+Uber Premier 8.42 kilometres | 27 min
+09:14 AM Terminal 2, International Airport, Mumbai
+09:41 AM Bandra Kurla Complex, Mumbai
+
+Uber India Systems Private Limited
+-- Test fixture for invoice-parser: invented data, not a real receipt --

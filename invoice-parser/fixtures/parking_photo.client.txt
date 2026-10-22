@@ -1,0 +1,10 @@
+CITY CENTRE PARKING
+Lower Parel, Mumbai
+PARKING RECEIPT
+Ticket No: PK-118204
+Vehicle: MH01AB1234
+In : 12/10/2025 10:05
+Out: 12/10/2025 13:40
+Duration 3h 35m
+Amount Paid Rs. 120.00
+Paid via UPI 12/10/2025 13:41

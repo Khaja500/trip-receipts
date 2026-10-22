@@ -1,0 +1,12 @@
+Blue Bottle Coffee
+66 Mint St, San Francisco, CA 94103
+Order #4471
+Oct 8, 2025 8:12 AM
+1 Cappuccino $5.75
+1 Croissant $4.50
+Subtotal $10.25
+Tax $0.89
+Tip $2.00
+Total $13.14
+Visa ending 4455
+-- Test fixture for invoice-parser: invented data, not a real receipt --

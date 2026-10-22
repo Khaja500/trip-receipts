@@ -1,0 +1,10 @@
+Ola
+CRN 7734981265
+Your ride on 9 Oct, 2025 with Ramesh
+Total Bill (rounded off) ₹1,250
+Ride Fee ₹1,140.00
+Taxes ₹57.00
+Toll ₹53.00
+Booking date 09 Oct 2025 17:52
+ANI Technologies Pvt. Ltd.
+-- Test fixture for invoice-parser: invented data, not a real receipt --

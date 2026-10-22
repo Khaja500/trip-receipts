@@ -224,11 +224,14 @@ struct PaymentRow: View {
                         .foregroundStyle(.orange)
                 }
                 if showStatus && payment.status == .work {
-                    Label(payment.hasReceipt ? "Receipt" : "No receipt",
-                          systemImage: payment.hasReceipt ? "paperclip" : "exclamationmark.triangle")
-                        .font(.caption2)
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(payment.hasReceipt ? Color.secondary : Color.orange)
+                    if payment.hasReceipt {
+                        VerificationBadge(verification: payment.verification)
+                    } else {
+                        Label("No receipt", systemImage: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }

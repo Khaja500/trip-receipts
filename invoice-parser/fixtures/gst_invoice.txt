@@ -1,0 +1,16 @@
+TAX INVOICE
+Original for Recipient
+Supplier: Brightdesk Workspaces Private Limited
+GSTIN: 29AAGCB1234M1Z2
+Invoice No.: BDW/25-26/1187
+Invoice Date: 10-Oct-2025
+Place of Supply: Karnataka (29)
+Bill To: Northwind Analytics Pvt Ltd
+Description SAC Qty Rate Taxable Value
+Day pass - hot desk 997212 2 750.00 1,500.00
+Meeting room (2 hrs) 997212 1 800.00 800.00
+Taxable Value 2,300.00
+IGST @ 18% 414.00
+Total Invoice Value 2,714.00
+Amount in words: Rupees Two Thousand Seven Hundred Fourteen Only
+-- Test fixture for invoice-parser: invented data, not a real receipt --

@@ -337,6 +337,7 @@ dialog::backdrop { background: rgba(10, 10, 9, 0.45); backdrop-filter: blur(2px)
 .receipt:first-child { border-top: 0; padding-top: 0; }
 .receipt .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .receipt small { color: var(--ink-3); display: block; }
+.receipt small.warn-text { color: var(--warn); }
 .sms {
   margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2);
   font: 13px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);

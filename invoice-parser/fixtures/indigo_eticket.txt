@@ -1,0 +1,16 @@
+IndiGo
+InterGlobe Aviation Limited
+E-Ticket / Itinerary
+PNR: K7XQ2M
+Booking Date: 30 Sep 2025 14:22
+Passenger: MR ARJUN MEHTA
+Flight 6E 5318 Mumbai (BOM) T2 to Bengaluru (BLR) T1
+Departure: 12 Oct 2025 06:10
+Arrival: 12 Oct 2025 07:55
+Fare Summary
+Base Fare ₹3,890.00
+Airport Charges ₹436.00
+GST ₹194.00
+Total Fare ₹4,520.00
+Payment: Credit Card XX4455
+-- Test fixture for invoice-parser: invented data, not a real receipt --

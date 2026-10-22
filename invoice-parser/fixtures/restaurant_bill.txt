@@ -1,0 +1,16 @@
+BARBEQUE NATION
+Barbeque Nation Hospitality Ltd.
+Phoenix Marketcity, Kurla West, Mumbai
+GSTIN: 27AAECS4183H1ZX FSSAI: 11517011000123
+TAX INVOICE
+Bill No: BN-KRL-004512 Table: 14 Pax: 3
+Date: 12/10/25 Time: 21:12
+Steward: Ravi
+Item Qty Rate Amount
+Veg Buffet Dinner 2 449.00 898.00
+Mocktail 2 127.19 254.38
+Sub Total 1,152.38
+CGST 2.5% 28.81
+SGST 2.5% 28.81
+Grand Total 1,210.00
+-- Test fixture for invoice-parser: invented data, not a real receipt --

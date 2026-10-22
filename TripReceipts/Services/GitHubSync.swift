@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Security
 import SwiftData
 import UIKit
 
@@ -42,6 +41,8 @@ final class GitHubSync {
     @ObservationIgnored private var observer: NSObjectProtocol?
     @ObservationIgnored private let defaults = UserDefaults.standard
 
+    private static let keychain = KeychainItem(service: "TripReceipts.GitHubSync", account: "token")
+
     private enum Key {
         static let enabled = "sync.enabled"
         static let owner = "sync.owner"
@@ -60,7 +61,7 @@ final class GitHubSync {
             owner: defaults.string(forKey: Key.owner) ?? "",
             repo: defaults.string(forKey: Key.repo) ?? ""
         )
-        hasToken = Keychain.read() != nil
+        hasToken = Self.keychain.read() != nil
         lastSyncedAt = defaults.object(forKey: Key.lastSyncedAt) as? Date
     }
 
@@ -81,7 +82,7 @@ final class GitHubSync {
         new.repo = new.repo.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let token = token?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
-            Keychain.save(token)
+            Self.keychain.save(token)
             hasToken = true
         }
         if new.fullName != settings.fullName {
@@ -98,7 +99,7 @@ final class GitHubSync {
     }
 
     func forgetToken() {
-        Keychain.delete()
+        Self.keychain.delete()
         hasToken = false
     }
 
@@ -159,7 +160,7 @@ final class GitHubSync {
     // MARK: - Upload
 
     private func push(force: Bool) async {
-        guard isActive, let token = Keychain.read() else { return }
+        guard isActive, let token = Self.keychain.read() else { return }
         let target = settings
 
         do {
@@ -295,41 +296,5 @@ struct SyncError: LocalizedError {
         default:
             "GitHub answered \(status)" + (message.map { ": \($0)" } ?? ".")
         }
-    }
-}
-
-// MARK: - Keychain
-
-/// The token lives in the Keychain, never in UserDefaults. Readable after the
-/// first unlock so a payment SMS arriving on a locked phone still syncs.
-private enum Keychain {
-    private static var base: [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "TripReceipts.GitHubSync",
-            kSecAttrAccount as String: "token"
-        ]
-    }
-
-    static func read() -> String? {
-        var query = base
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func save(_ token: String) {
-        delete()
-        var query = base
-        query[kSecValueData as String] = Data(token.utf8)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
-    }
-
-    static func delete() {
-        SecItemDelete(base as CFDictionary)
     }
 }

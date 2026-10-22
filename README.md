@@ -40,12 +40,19 @@ parse, store, ask — so you can answer a real notification from the lock screen
 
 ## Checking it without Xcode
 
-Both scripts build with the plain Swift toolchain and run on the Mac:
+Every script runs on the Mac with the plain Swift toolchain and python3:
 
 ```
-./Tools/parser-check.sh    # 20 sample bank messages → expected parse
-./Tools/rules-check.sh     # 20 rules: duplicates, refunds, trips, retention, receipts, proof
+./Tools/parser-check.sh          # 20 sample bank messages → expected parse
+./Tools/rules-check.sh           # 20 rules: duplicates, refunds, trips, retention, receipts, proof
+./Tools/verifier-check.sh        # 25 payment + invoice pairs → matched / warning / unverified
+./Tools/invoice-parser-check.sh  # 16 sample invoices (text, PDF, photo) → expected fields, then HTTP
+./Tools/receipt-check.sh         # real files through the app's client and a live parser, end to end
 ```
+
+When a receipt is wrongly flagged or wrongly passed, add the pair to
+`VerifierCheck/VerifierCases.swift`; when an invoice is misread, add it to
+`invoice-parser/fixtures/` with an `.expected.json` — before changing a rule.
 
 `Tools/parser-check.sh` is the one to run after touching any pattern in
 `SMSParser.swift`. When a real message is misread, add it to
@@ -58,14 +65,18 @@ changing the patterns.
 TripReceipts/
   App/        entry point, shared ModelContainer, Router, notification actions
   Intents/    CheckPaymentMessageIntent — what Shortcuts calls
-  Models/     Payment, Trip, ReceiptFile, ExpenseCategory
+  Models/     Payment, Trip, ReceiptFile, ReceiptVerification, ExpenseCategory, Money
   Services/   SMSParser, MatchingRules, PaymentStore, NotificationManager,
-              ReceiptOCR, ReceiptTotalReader, ReportBuilder, ProofHasher,
-              CategoryGuesser
-  Views/      Inbox, Expenses, Trips, Setup, PaymentDetail, AddPayment, Receipts
-ParserCheck/  sample messages and the two check suites
-Tools/        the scripts that run them
-docs/         the website (GitHub Pages): index.html, app.js, styles.css, sample.json
+              ReceiptOCR (on-device fallback), ReceiptTotalReader,
+              InvoiceParseClient, ReceiptCheck, ReceiptVerifier, VerifierRules,
+              ReportBuilder, ProofHasher, CategoryGuesser, KeychainItem
+  Views/      Inbox, Expenses, Trips, Setup, PaymentDetail, AddPayment, Receipts,
+              VerificationBanner, AddAnywaySheet
+ParserCheck/    sample messages and the two check suites
+VerifierCheck/  payment + invoice pairs, and the end-to-end check
+invoice-parser/ the online invoice parser (python3, standard library only)
+Tools/          the scripts that run them
+docs/           the website (GitHub Pages): index.html, app.js, styles.css, sample.json
 ```
 
 `Services/GitHubSync.swift` (when and where to upload) and
@@ -103,15 +114,66 @@ its fingerprint, and the exported PDF prints both the message and the
 fingerprint on the expense's page. Where the bank and the UPI app both sent a
 message, the second is kept alongside the first.
 
+## Receipt check
+
+Every receipt attached to a payment is checked against it: amount, date and
+time, and payee. A mismatch is a **warning, never a block**.
+
+```
+attach → the phone reads it (Vision / PDFKit)
+       → file + that text go to the parser server (10 s limit)
+       → ReceiptVerifier compares the fields with the payment
+            ✓ matched     all agree, or differ in an accepted way (a tip,
+                          a bill printed before midnight, a hotel stay)
+            ⚠ warning     something disagrees — the banner says exactly what:
+                          "Invoice total ₹842 vs payment ₹1,250; invoice dated
+                          3 Oct vs payment 9 Oct"
+            ○ unverified  no server, server slow or down, or the total couldn't
+                          be read with confidence — the phone's own reading is
+                          shown, and it can still be filed
+```
+
+On a warning the payment screen offers **Fix the receipt** (the replacement
+is attached first, then the wrong one removed) and **Add to trip anyway**
+(one tap, optional note). A waiting payment with a mismatching receipt stays
+in the Inbox until you choose; anything else is filed as before. What was
+read is shown beside the payment and never changes it. Editing the payee or
+date re-runs the check.
+
+Every tolerance is in `Services/VerifierRules.swift`:
+
+| Check | Match | Close — passes with a note | Otherwise |
+|---|---|---|---|
+| Amount | within ₹1 | payment up to 15% above the invoice | warning |
+| Date/time | within 30 min, or the same day when the invoice has no time | same day; next day within 3 h of midnight; inside a hotel stay or travel window | warning |
+| Payee | same name, one inside the other, a UPI handle, an acronym (IRCTC) | similar spelling | warning |
+
+An invoice in another currency is not compared (unverified), and a reading
+from the phone alone is never a warning.
+
+### The parser server
+
+`invoice-parser/` is a small stateless service: `POST /v1/parse` takes a
+receipt (PDF, JPEG, PNG, HEIC) and returns merchant, total, currency, tax,
+invoice date and time, invoice number, line items, any stay or travel window,
+and a confidence per field. Files are read in memory and never stored or
+logged. See `invoice-parser/README.md` to run or host it, then put its address
+in Setup → *Receipt check*. In the simulator, run it on this Mac and use
+`127.0.0.1:8787`; on the phone it needs to be hosted (HTTPS) or reachable on
+your network.
+
 ## Export
 
 Trips → a trip → *Export claim pack* produces:
 
-- **PDF** — summary and category totals, line items, then a page per expense
-  with its details, the original message, the fingerprint, and the receipt
-  images (PDF invoices rendered page by page).
+- **PDF** — summary and category totals, a list of receipt warnings (with the
+  reason and any note), line items marked ✓ / ⚠ / ○, then a page per expense
+  with its details, the original message, the fingerprint, the receipt check
+  (what was read, how it compared, who read it) and the receipt images (PDF
+  invoices rendered page by page).
 - **CSV** — a row per expense including reference, method, receipt count, the
-  original message and the fingerprint.
+  original message, the fingerprint, and `verification_status`,
+  `parsed_total`, `parsed_date`, `overridden`, `note`.
 
 Both go through the iOS share sheet.
 
@@ -165,11 +227,15 @@ fingerprints; *Look around with sample data* on the site loads it.
 
 ## Privacy
 
-Parsing, text recognition and storage all happen on the iPhone. There is no
-server and no account. Only messages that parse as payments are stored — OTPs
-and non-payment texts are discarded, never written down. Personal payments are
-deleted 30 days after you mark them. With website sync off, data leaves the
+SMS parsing and storage happen on the iPhone. There is no account. Only
+messages that parse as payments are stored — OTPs and non-payment texts are
+discarded, never written down. Personal payments are deleted 30 days after you
+mark them. With website sync off and no parser server set, data leaves the
 phone only when you export and share a report.
+
+With a parser server set, each receipt you attach — and the text the phone
+read off it — is sent to that server, nothing else. The server processes it in
+memory and logs only method, path, status, size and time.
 
 With website sync on, the payments and trips — including the original SMS
 text — are also copied to the private repo you chose. Every sync is a commit,
@@ -193,3 +259,8 @@ Carried over from the spec, and still true:
   on the next change or the next time the app is left.
 - Fine-grained tokens expire (you pick when). The phone's Setup and the
   website both say so when GitHub refuses one.
+- The receipt check needs the parser server to be running somewhere the phone
+  can reach; until it is hosted, every receipt is ○ unverified. The parser is
+  rule-based and tuned on Indian invoices; a misread invoice raises a warning
+  you can add past, and should become a fixture.
+- Foreign-currency invoices aren't compared (no exchange rates yet).

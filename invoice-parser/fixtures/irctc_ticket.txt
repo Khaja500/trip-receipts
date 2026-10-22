@@ -1,0 +1,13 @@
+Electronic Reservation Slip (ERS)
+IRCTC
+PNR No: 4521367890
+Train No./Name: 12951 / MUMBAI RAJDHANI
+Date of Booking: 01-Oct-2025 20:05:41 HRS
+Date of Journey: 12-Oct-2025
+Boarding At: MUMBAI CENTRAL (MMCT)
+Class: THIRD AC (3A) Quota: GENERAL (GN)
+Ticket Fare: ₹1,580.00
+IRCTC Convenience Fee (Incl. of GST): ₹35.40
+Travel Insurance Premium (Incl. of GST): ₹0.45
+Total Fare (all inclusive): ₹1,615.85
+-- Test fixture for invoice-parser: invented data, not a real receipt --

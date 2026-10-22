@@ -1,0 +1,13 @@
+RAPIDO
+Ride ID: RD17456329012
+Bike Taxi
+Date: 11/10/2025 Time: 08:05 PM
+Pickup: Koramangala 5th Block
+Drop: Indiranagar Metro
+Distance 6.2 km
+Ride Charge ₹96.00
+Platform fee ₹4.00
+Total Amount ₹100.00
+Paid via UPI
+Roppen Transportation Services Pvt Ltd
+-- Test fixture for invoice-parser: invented data, not a real receipt --

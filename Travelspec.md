@@ -129,7 +129,15 @@ Payment   amount, currency, merchant, instrument, reference, bank, paidAt
 
 Trip      name, destination, startDate, endDate, purpose, payments → [Payment]
 
-ReceiptFile  data (external storage), isPDF, addedAt, ocrText, ocrTotal, payment → Payment
+ReceiptFile  data (external storage), isPDF, addedAt, ocrText, ocrTotal, payment → Payment,
+             verification → ReceiptVerification
+
+ReceiptVerification  status (matched | warning | unverified),
+          amountResult, timeResult (match | close | mismatch | unread),
+          merchantResult (match | weak | mismatch | unread),
+          invoice (what the parser read: parsedTotal, parsedDate, parsedTime,
+          parsedMerchant, …), source (online | on-device), fallbackReason,
+          overriddenByUser, userNote, checkedAt
 ```
 
 **One container, opened once.** The app and the App Intent share a single
@@ -145,7 +153,7 @@ tests.
 - Parsing, text recognition and storage all happen on the iPhone. No server, no account.
 - Only messages that parse as payments are saved.
 - Personal payments are deleted after 30 days.
-- Data leaves the phone only when you export and share a report, or, if turned on, through website sync (§11).
+- Data leaves the phone only when you export and share a report, or, if turned on, through website sync (§11) and the receipt check (§12).
 
 ## 9. Known limits
 
@@ -185,3 +193,22 @@ A read-only web view of the same data, for a laptop at claim time.
 - **Not in scope:** answering or editing from the web — the phone stays the
   only writer.
 
+## 12. Receipt check (v0.4)
+
+An attached invoice is verified against its payment — amount, date/time,
+merchant. A mismatch is a **warning, never a block**: the user can always
+*Add to trip anyway*, and the flag travels with the expense into the proof
+section and the export. Build plan: `Travelplan.md`, stages 4–6.
+
+- **Reading:** the phone reads the receipt (Vision, PDFKit) and sends the file
+  with that text to the parser service (`invoice-parser/`), which returns the
+  fields and a confidence for each. Over 10 s, unreachable, or a total it isn't
+  sure of → the phone's reading is used and the receipt is *unverified*.
+- **Comparing:** `ReceiptVerifier` applies `VerifierRules`; any mismatch → ⚠
+  warning, all match → ✓, close only → ✓ with a note, unread total → ○.
+  Parsed values are shown, never written over the payment.
+- **Acting:** a banner names each difference and offers *Fix the receipt* or
+  *Add to trip anyway* (optional note). A waiting payment with a warning stays
+  in the Inbox until one is chosen.
+- **Server privacy:** files are processed in memory; nothing about content is
+  stored or logged. Per-install signed tokens, rate-limited.

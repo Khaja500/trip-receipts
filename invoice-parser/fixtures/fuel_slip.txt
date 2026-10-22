@@ -1,0 +1,14 @@
+WELCOME
+INDIAN OIL
+SHREE SAI SERVICE STATION
+NH-48, Khalapur, Raigad
+TEL: 02192-274455
+Receipt No: 004471
+Date: 11/10/2025 Time: 07:42
+Nozzle No: 3 Product: PETROL
+Rate (Rs/L): 103.44
+Volume (L): 19.34
+Sale Amount (Rs): 2000.00
+Mode: CARD
+THANK YOU. VISIT AGAIN
+-- Test fixture for invoice-parser: invented data, not a real receipt --

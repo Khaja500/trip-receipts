@@ -13,6 +13,9 @@ struct SetupView: View {
     @State private var showAllSamples = false
     @State private var syncForm = GitHubSync.shared.settings
     @State private var syncToken = ""
+    @AppStorage(InvoiceParseClient.serverKey) private var parserServer = ""
+    @State private var parserStatus: (ok: Bool, text: String)?
+    @State private var checkingParser = false
 
     /// One automation per keyword — between them they catch the wording every
     /// Indian bank uses for an outgoing payment.
@@ -24,6 +27,7 @@ struct SetupView: View {
                 notificationSection
                 automationSection
                 testSection
+                parserSection
                 websiteSection
                 privacySection
                 aboutSection
@@ -119,6 +123,44 @@ struct SetupView: View {
         .sheet(isPresented: $showAllSamples) { ParserSampleView() }
     }
 
+    private var parserSection: some View {
+        Section {
+            LabeledContent("Parser server") {
+                TextField("https://… or 127.0.0.1:8787", text: $parserServer)
+                    .multilineTextAlignment(.trailing)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: parserServer) { _, _ in parserStatus = nil }
+            }
+
+            Button {
+                Task { await checkParser() }
+            } label: {
+                if checkingParser {
+                    HStack(spacing: 8) { ProgressView(); Text("Checking…") }
+                } else {
+                    Label("Check connection", systemImage: "antenna.radiowaves.left.and.right")
+                }
+            }
+            .disabled(InvoiceParseClient.serverURL(from: parserServer) == nil || checkingParser)
+
+            if let parserStatus {
+                Label(parserStatus.text,
+                      systemImage: parserStatus.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(parserStatus.ok ? .green : .orange)
+            }
+        } header: {
+            Text("Receipt check")
+        } footer: {
+            Text("Each receipt you attach is sent to this server, which reads its total, date and "
+                 + "merchant so they can be checked against the payment. The server reads the file "
+                 + "in memory and keeps nothing. With no server, or one that takes over 10 seconds, "
+                 + "this iPhone reads the total itself and the receipt is marked Unverified.")
+        }
+    }
+
     private var websiteSection: some View {
         let sync = GitHubSync.shared
         return Section {
@@ -199,19 +241,28 @@ struct SetupView: View {
 
     private var privacySection: some View {
         let sync = GitHubSync.shared
+        let parserHost = InvoiceParseClient.serverURL(from: parserServer)?.host
+        let uploads = sync.isActive || parserHost != nil
         return Section("Privacy") {
-            if sync.isActive {
-                Label("Parsing and receipt reading happen on this iPhone", systemImage: "iphone")
-                Label("Payments and trips sync to your private repo \(sync.settings.fullName)",
-                      systemImage: "arrow.triangle.2.circlepath")
-                Label("Receipt images never leave the phone", systemImage: "photo")
+            if uploads {
+                Label("Payment messages are parsed on this iPhone", systemImage: "iphone")
+                if sync.isActive {
+                    Label("Payments and trips sync to your private repo \(sync.settings.fullName)",
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                if let parserHost {
+                    Label("Receipts you attach are read by \(parserHost), which keeps nothing",
+                          systemImage: "doc.text.magnifyingglass")
+                } else {
+                    Label("Receipt images never leave the phone", systemImage: "photo")
+                }
             } else {
                 Label("Everything stays on this iPhone", systemImage: "iphone")
                 Label("No account, no server, no upload", systemImage: "wifi.slash")
             }
             Label("Only messages that parse as payments are saved", systemImage: "line.3.horizontal.decrease")
             Label("Personal payments are deleted after 30 days", systemImage: "trash")
-            if !sync.isActive {
+            if !uploads {
                 Label("Data leaves only when you share an export", systemImage: "square.and.arrow.up")
             }
         }
@@ -227,6 +278,17 @@ struct SetupView: View {
     }
 
     // MARK: - Actions
+
+    private func checkParser() async {
+        guard let client = InvoiceParseClient.configured() else { return }
+        checkingParser = true
+        defer { checkingParser = false }
+        do {
+            parserStatus = (true, "Connected · \(try await client.check())")
+        } catch {
+            parserStatus = (false, error.localizedDescription)
+        }
+    }
 
     private func refreshNotificationStatus() async {
         let status = await NotificationManager.authorizationStatus()

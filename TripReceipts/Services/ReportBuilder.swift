@@ -53,7 +53,34 @@ enum ReportBuilder {
                         font: .boldSystemFont(ofSize: 16))
             cursor.draw("\(payments.count) expenses · \(missing) without a receipt",
                         font: .systemFont(ofSize: 11), color: .darkGray)
+            let statuses = payments.compactMap { $0.verification?.status }
+            if !statuses.isEmpty {
+                let count = { (status: VerificationStatus) in statuses.filter { $0 == status }.count }
+                cursor.draw("Receipts: \(count(.matched)) verified · \(count(.warning)) with a warning · "
+                            + "\(count(.unverified)) unverified",
+                            font: .systemFont(ofSize: 11), color: .darkGray)
+            }
             cursor.space(14)
+
+            // Every receipt that doesn't match, said plainly, before anything else.
+            let warnings = payments.filter { $0.verification?.status == .warning }
+            if !warnings.isEmpty {
+                cursor.draw("Receipt warnings", font: .boldSystemFont(ofSize: 13), color: .systemRed)
+                cursor.space(4)
+                for payment in warnings {
+                    guard let check = payment.verification else { continue }
+                    cursor.draw("⚠ \(shortDate(payment.paidAt))  \(payment.merchant) — "
+                                + check.result(for: payment).summary,
+                                font: .systemFont(ofSize: 10))
+                    cursor.draw(check.overriddenByUser
+                                ? "Added to the trip anyway"
+                                  + (check.userNote.isEmpty ? "." : ": \u{201C}\(check.userNote)\u{201D}")
+                                : "Not resolved: no matching receipt yet.",
+                                font: .italicSystemFont(ofSize: 9), color: .darkGray)
+                    cursor.space(3)
+                }
+                cursor.space(11)
+            }
 
             // By category
             var byCategory: [ExpenseCategory: Double] = [:]
@@ -74,14 +101,18 @@ enum ReportBuilder {
             cursor.drawRow(left: "Date    Payee", right: "Amount", bold: true)
             cursor.rule()
             for payment in payments {
-                let receipt = payment.hasReceipt ? "" : "  (no receipt)"
                 cursor.drawRow(
-                    left: "\(shortDate(payment.paidAt))  \(payment.merchant)\(receipt)",
+                    left: "\(shortDate(payment.paidAt))  \(payment.merchant)\(mark(payment))",
                     right: Money.string(payment.netClaimable, currency: payment.currency)
                 )
             }
             cursor.rule()
             cursor.drawRow(left: "Total", right: Money.string(total, currency: currency), bold: true)
+            if !statuses.isEmpty {
+                cursor.space(4)
+                cursor.draw("✓ receipt matches the payment · ⚠ receipt doesn't match · ○ receipt not verified",
+                            font: .systemFont(ofSize: 8), color: .gray)
+            }
 
             // One page per expense: the detail, the proof, the receipts.
             for (index, payment) in payments.enumerated() {
@@ -141,6 +172,14 @@ enum ReportBuilder {
                     }
                 }
 
+                // What each receipt was checked against, and how it came out.
+                for receipt in payment.receipts.sorted(by: { $0.addedAt < $1.addedAt }) {
+                    if let check = receipt.verification {
+                        cursor.space(10)
+                        drawCheck(check, receipt: receipt, payment: payment, on: &cursor)
+                    }
+                }
+
                 // Receipts
                 if payment.receipts.isEmpty {
                     cursor.space(10)
@@ -150,7 +189,13 @@ enum ReportBuilder {
                         for image in images(for: receipt) {
                             cursor.newPage()
                             cursor.draw("Receipt — \(payment.merchant)", font: .boldSystemFont(ofSize: 12))
-                            if let ocrTotal = receipt.ocrTotal {
+                            if let check = receipt.verification {
+                                let summary = check.result(for: payment).summary
+                                cursor.draw("Receipt check: \(VerificationText.title(check))"
+                                            + (summary.isEmpty ? "." : " — \(summary)."),
+                                            font: .systemFont(ofSize: 9),
+                                            color: check.status == .warning ? .red : .darkGray)
+                            } else if let ocrTotal = receipt.ocrTotal {
                                 let match = receipt.matchesPaymentTotal == true
                                 cursor.draw(
                                     "Total read from the receipt: "
@@ -169,6 +214,46 @@ enum ReportBuilder {
         }
     }
 
+    private static func mark(_ payment: Payment) -> String {
+        guard payment.hasReceipt else { return "  (no receipt)" }
+        switch payment.verification?.status {
+        case .matched: return "  ✓"
+        case .warning: return "  ⚠"
+        case .unverified: return "  ○"
+        case nil: return ""
+        }
+    }
+
+    private static func drawCheck(
+        _ check: ReceiptVerification, receipt: ReceiptFile, payment: Payment, on cursor: inout Cursor
+    ) {
+        let invoice = check.invoice
+        let currency = invoice.currency ?? payment.currency
+        let symbol = switch check.status {
+        case .matched: "✓"
+        case .warning: "⚠"
+        case .unverified: "○"
+        }
+        cursor.draw("Receipt check — \(receipt.filename)", font: .boldSystemFont(ofSize: 12))
+        cursor.draw("\(symbol) \(VerificationText.title(check))", font: .boldSystemFont(ofSize: 10),
+                    color: check.status == .warning ? .systemRed : .darkGray)
+        for line in VerificationText.details(check, check.result(for: payment), currency: payment.currency) {
+            cursor.draw(line, font: .systemFont(ofSize: 9), color: .darkGray)
+        }
+        cursor.space(2)
+        cursor.drawField("Total read", invoice.total.map { Money.string($0, currency: currency) } ?? "not read")
+        cursor.drawField("Date read", VerificationText.readDate(invoice) ?? "not read")
+        if let period = VerificationText.period(invoice) {
+            cursor.drawField(invoice.isHotel ? "Stay" : "Travel", period)
+        }
+        cursor.drawField("Merchant read", invoice.merchant ?? "not read")
+        if let number = invoice.invoiceNumber { cursor.drawField("Invoice no.", number) }
+        cursor.drawField("Read by", check.source == .online ? "Online parser" : "This iPhone only")
+        if check.overriddenByUser {
+            cursor.drawField("Added anyway", check.userNote.isEmpty ? "Yes, without a note" : check.userNote)
+        }
+    }
+
     private static func images(for receipt: ReceiptFile) -> [UIImage] {
         if receipt.isPDF {
             return ReceiptOCR.pageImages(fromPDF: receipt.data, limit: 10).map { UIImage(cgImage: $0) }
@@ -181,7 +266,8 @@ enum ReportBuilder {
     static func csv(payments: [Payment]) -> String {
         let headers = ["Date", "Payee", "Category", "Trip", "Currency", "Amount",
                        "Claimed", "Refunded", "Net claimed", "Paid by", "Bank",
-                       "Reference", "Receipts", "Notes", "Original message", "Proof SHA-256"]
+                       "Reference", "Receipts", "Notes", "Original message", "Proof SHA-256",
+                       "verification_status", "parsed_total", "parsed_date", "overridden", "note"]
         var rows = [headers.map(escape).joined(separator: ",")]
 
         let formatter = DateFormatter()
@@ -205,10 +291,23 @@ enum ReportBuilder {
                 p.notes,
                 p.isManual ? "(entered manually)" : p.rawMessage,
                 p.messageHash
-            ]
+            ] + verificationFields(p.verification)
             rows.append(fields.map(escape).joined(separator: ","))
         }
         return rows.joined(separator: "\r\n")
+    }
+
+    /// The receipt check that speaks for the payment; blank without a receipt.
+    private static func verificationFields(_ check: ReceiptVerification?) -> [String] {
+        guard let check else { return ["", "", "", "", ""] }
+        let date = [check.parsedDate, check.parsedTime].compactMap { $0 }.joined(separator: " ")
+        return [
+            check.statusRaw,
+            check.parsedTotal.map { String(format: "%.2f", $0) } ?? "",
+            date,
+            check.overriddenByUser ? "yes" : "no",
+            check.userNote
+        ]
     }
 
     private static func escape(_ field: String) -> String {

@@ -104,11 +104,22 @@ struct ReceiptRow: View {
         }
     }
 
-    /// The read total is a hint, never a correction — so it says what it saw
-    /// and leaves the amount alone.
+    /// What the check found, in one line. It never corrects the payment —
+    /// it says what it saw and leaves the amount alone.
     @ViewBuilder
     private var matchLabel: some View {
-        if let ocrTotal = receipt.ocrTotal {
+        if let verification = receipt.verification {
+            VerificationBadge(verification: verification)
+            let detail = VerificationText.details(verification, verification.result(for: payment),
+                                                  currency: payment.currency)
+            if let first = detail.first {
+                Text(detail.count > 1 && verification.status == .warning
+                     ? detail.joined(separator: "; ") : first)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        } else if let ocrTotal = receipt.ocrTotal {
             let matches = receipt.matchesPaymentTotal == true
             Label(
                 matches
@@ -141,6 +152,17 @@ struct ReceiptViewer: View {
                     }
                 } else {
                     ContentUnavailableView("Cannot show this file", systemImage: "doc.questionmark")
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                if let verification = receipt.verification, let payment = receipt.payment {
+                    VerificationBanner(verification: verification,
+                                       result: verification.result(for: payment),
+                                       currency: payment.currency)
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.bar)
                 }
             }
             .navigationTitle(receipt.filename)

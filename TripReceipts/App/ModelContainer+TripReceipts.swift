@@ -7,7 +7,7 @@ extension ModelContainer {
     /// over the same store would hide its writes from an open Inbox. The
     /// `inMemory` flag exists for tests, which want a throwaway store.
     static func tripReceipts(inMemory: Bool = false) throws -> ModelContainer {
-        let schema = Schema([Payment.self, Trip.self, ReceiptFile.self])
+        let schema = Schema([Payment.self, Trip.self, ReceiptFile.self, ReceiptVerification.self])
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: inMemory,
