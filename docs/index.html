@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <title>Trip Receipts</title>
+  <meta name="description" content="Work-travel payments caught on the iPhone, live from your private GitHub repo.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121211'/%3E%3Cpath d='M10 8h12v17l-3-2-3 2-3-2-3 2z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M13 13h6M13 17h4' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="./" aria-label="Trip Receipts home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M10 8h12v17l-3-2-3 2-3-2-3 2z"/><path d="M13 13h6M13 17h4"/></svg>
+        <span>Trip Receipts</span>
+      </a>
+      <div class="topbar-actions">
+        <span class="pill" id="pill" hidden></span>
+        <button class="icon-btn" id="refresh" type="button" title="Check for new payments" aria-label="Check for new payments" hidden></button>
+        <button class="icon-btn" id="settings" type="button" title="Connection" aria-label="Connection" hidden></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="connect" class="connect" hidden>
+      <div class="connect-copy">
+        <h1>Your phone's payments, on any screen</h1>
+        <p class="lede">The Trip Receipts app catches every payment SMS on the iPhone. With website sync on,
+          it writes them to a private GitHub repo after each change, and this page reads them from there.
+          No server sits in between.</p>
+        <ol class="steps">
+          <li><strong>Phone:</strong> Trip Receipts → Setup → Website. Enter the owner, the private repo and a token
+            with <em>Contents: Read and write</em> on that repo only, then tap <em>Save and sync now</em>.</li>
+          <li><strong>Here:</strong> enter the same repo and a second token with <em>Contents: Read-only</em>.
+            <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token&nbsp;↗</a></li>
+        </ol>
+      </div>
+
+      <form id="connect-form" class="card connect-form" novalidate>
+        <p class="connected-as" id="connected-as" hidden></p>
+        <label class="field">
+          <span>Private repo</span>
+          <input id="f-repo" name="repo" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="owner/trip-receipts-data" required>
+        </label>
+        <label class="field">
+          <span>Read-only token</span>
+          <input id="f-token" name="token" type="password" autocomplete="off" spellcheck="false"
+                 placeholder="github_pat_…" required>
+        </label>
+        <label class="check">
+          <input id="f-remember" type="checkbox" checked>
+          <span>Remember on this browser</span>
+        </label>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit" id="connect-btn">Connect</button>
+          <button class="btn btn-ghost" type="button" id="disconnect-btn" hidden>Disconnect</button>
+          <button class="btn btn-ghost" type="button" id="cancel-btn" hidden>Cancel</button>
+        </div>
+        <p class="fine">The token stays in this browser and is only ever sent to api.github.com.
+          This page is static files on GitHub Pages.</p>
+        <hr>
+        <button class="link-btn" type="button" id="demo-btn">Look around with sample data instead</button>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="banner" id="banner" role="status" hidden></div>
+      <div class="tiles" id="tiles"></div>
+
+      <div class="tabs" role="tablist" aria-label="Views">
+        <button role="tab" id="tab-inbox" data-tab="inbox" aria-controls="panel">Inbox</button>
+        <button role="tab" id="tab-expenses" data-tab="expenses" aria-controls="panel">Expenses</button>
+        <button role="tab" id="tab-trips" data-tab="trips" aria-controls="panel">Trips</button>
+        <button role="tab" id="tab-all" data-tab="all" aria-controls="panel">All payments</button>
+      </div>
+      <div id="panel" role="tabpanel"></div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>Read-only. Answer payments, add receipts and edit trips on the iPhone; this page follows within half a minute.
+      Receipt images stay on the phone. <a href="https://github.com/Khaja500/trip-receipts" target="_blank" rel="noopener">Source</a></p>
+  </footer>
+
+  <dialog id="detail" aria-labelledby="detail-title"></dialog>
+</body>
+</html>

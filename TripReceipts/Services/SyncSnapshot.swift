@@ -1,0 +1,162 @@
+import Foundation
+import SwiftData
+import CryptoKit
+
+/// What the website sees: every payment and trip on the phone as plain
+/// values, written to one JSON file. Receipt images stay on the phone — only
+/// their names and the total read from them go up.
+///
+/// Dates encode as ISO 8601 to the second, the same stamp `ProofHasher`
+/// signs, so the website can recompute each fingerprint from the text it is
+/// shown.
+struct SyncSnapshot: Codable, Equatable {
+    static let schemaVersion = 1
+
+    var schema = SyncSnapshot.schemaVersion
+    var generatedAt: Date
+    var payments: [PaymentRecord]
+    var trips: [TripRecord]
+
+    struct PaymentRecord: Codable, Equatable {
+        var uid: String
+        var status: String
+        var amount: Double
+        var currency: String
+        var merchant: String
+        var instrument: String
+        var reference: String?
+        var bank: String?
+        var paidAt: Date
+        var category: String
+        var claimableAmount: Double
+        var refundedAmount: Double
+        var netClaimable: Double
+        var notes: String
+        var isManual: Bool
+        var parseConfidence: Double
+        var reviewedAt: Date?
+        var tripID: String?
+        var receipts: [ReceiptRecord]
+
+        // Proof of payment, verbatim
+        var rawMessage: String
+        var sender: String
+        var receivedAt: Date
+        var messageHash: String
+        var additionalMessages: [StoredMessage]
+    }
+
+    struct ReceiptRecord: Codable, Equatable {
+        var filename: String
+        var isPDF: Bool
+        var addedAt: Date
+        var ocrTotal: Double?
+    }
+
+    struct TripRecord: Codable, Equatable {
+        var id: String
+        var name: String
+        var destination: String
+        var startDate: Date
+        var endDate: Date
+        var purpose: String
+        var client: String
+        var costCentre: String
+    }
+}
+
+extension SyncSnapshot {
+    static func build(context: ModelContext, at now: Date = .now) throws -> SyncSnapshot {
+        let payments = try context.fetch(FetchDescriptor<Payment>(
+            sortBy: [SortDescriptor(\.receivedAt, order: .reverse)]
+        ))
+        let trips = try context.fetch(FetchDescriptor<Trip>(
+            sortBy: [SortDescriptor(\.startDate, order: .reverse)]
+        ))
+        return SyncSnapshot(
+            generatedAt: now,
+            payments: payments.map(PaymentRecord.init),
+            trips: trips.map(TripRecord.init)
+        )
+    }
+
+    /// Pretty-printed with sorted keys, so each sync is a readable diff in
+    /// the repo's history.
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }()
+
+    func encoded() throws -> Data {
+        try Self.encoder.encode(self)
+    }
+
+    /// Changes when the data does, not when the snapshot was taken — what
+    /// decides whether there is anything to upload.
+    func contentDigest() throws -> String {
+        var undated = self
+        undated.generatedAt = Date(timeIntervalSince1970: 0)
+        let digest = SHA256.hash(data: try undated.encoded())
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+extension SyncSnapshot.PaymentRecord {
+    init(_ p: Payment) {
+        self.init(
+            uid: p.uid,
+            status: p.statusRaw,
+            amount: p.amount,
+            currency: p.currency,
+            merchant: p.merchant,
+            instrument: p.instrument,
+            reference: p.reference,
+            bank: p.bank,
+            paidAt: p.paidAt,
+            category: p.categoryRaw,
+            claimableAmount: p.claimableAmount,
+            refundedAmount: p.refundedAmount,
+            netClaimable: p.netClaimable,
+            notes: p.notes,
+            isManual: p.isManual,
+            parseConfidence: p.parseConfidence,
+            reviewedAt: p.reviewedAt,
+            tripID: p.trip?.syncID,
+            receipts: p.receipts
+                .sorted { $0.addedAt < $1.addedAt }
+                .map { SyncSnapshot.ReceiptRecord(filename: $0.filename, isPDF: $0.isPDF,
+                                                  addedAt: $0.addedAt, ocrTotal: $0.ocrTotal) },
+            rawMessage: p.rawMessage,
+            sender: p.sender,
+            receivedAt: p.receivedAt,
+            messageHash: p.messageHash,
+            additionalMessages: p.additionalMessages
+        )
+    }
+}
+
+extension SyncSnapshot.TripRecord {
+    init(_ t: Trip) {
+        self.init(
+            id: t.syncID,
+            name: t.name,
+            destination: t.destination,
+            startDate: t.startDate,
+            endDate: t.endDate,
+            purpose: t.purpose,
+            client: t.client,
+            costCentre: t.costCentre
+        )
+    }
+}
+
+extension Trip {
+    /// Stable id for the website. Trips have no uid, and adding one now would
+    /// give every existing trip the same migrated default, so creation time —
+    /// never edited — stands in.
+    var syncID: String {
+        String(Int64((createdAt.timeIntervalSince1970 * 1000).rounded()))
+    }
+}
