@@ -22,6 +22,7 @@ struct PaymentDetailView: View {
     @State private var replacing: ReceiptFile?
     @State private var showFixOptions = false
     @State private var showPhotoPicker = false
+    @State private var recheckingOnline = false
 
     private var store: PaymentStore { PaymentStore(context: context) }
 
@@ -239,6 +240,24 @@ struct PaymentDetailView: View {
                 }
             }
 
+            if canRecheckOnline {
+                Button {
+                    Task {
+                        recheckingOnline = true
+                        await store.recheckOnline(payment)
+                        recheckingOnline = false
+                    }
+                } label: {
+                    if recheckingOnline {
+                        HStack { ProgressView(); Text("Checking with the parser…") }
+                    } else {
+                        Label("Check again online", systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(recheckingOnline)
+                .accessibilityIdentifier("recheckOnlineButton")
+            }
+
             Button {
                 replacing = nil
                 showScanner = true
@@ -380,6 +399,12 @@ struct PaymentDetailView: View {
     }
 
     // MARK: - Receipts
+
+    /// Receipts the server never saw, and a server to send them to now.
+    private var canRecheckOnline: Bool {
+        InvoiceParseClient.configured() != nil
+            && payment.receipts.contains { $0.verification?.source != .online }
+    }
 
     private func attach(images: [UIImage], replacing old: ReceiptFile?) async {
         for (index, image) in images.enumerated() {

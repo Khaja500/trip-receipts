@@ -231,6 +231,27 @@ struct PaymentStore {
         return verification
     }
 
+    /// Sends receipts the server never saw — attached offline or before a
+    /// parser was set up — and stores the new result. Filing is left alone:
+    /// the payment has already been answered one way or the other.
+    @MainActor
+    func recheckOnline(_ payment: Payment) async {
+        for receipt in payment.receipts where receipt.verification?.source != .online {
+            let check = await ReceiptCheck.run(data: receipt.data, isPDF: receipt.isPDF,
+                                               filename: receipt.filename, for: .init(payment))
+            guard check.source == .online else { continue }
+            if let verification = receipt.verification {
+                verification.reread(check.invoice, source: .online, fallbackReason: nil, against: payment)
+            } else {
+                let verification = ReceiptVerification(invoice: check.invoice, source: .online)
+                context.insert(verification)
+                receipt.verification = verification
+                verification.refresh(against: payment)
+            }
+        }
+        try? context.save()
+    }
+
     /// "Add to trip anyway": the receipt stays, the payment is filed, and the
     /// choice — with any note — travels into the proof and the export.
     func addAnyway(_ verification: ReceiptVerification, note: String, payment: Payment) {

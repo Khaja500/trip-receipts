@@ -45,6 +45,16 @@ final class ReceiptVerification {
     var parsedTime: String? { invoice.invoiceTime }
     var parsedMerchant: String? { invoice.merchant }
 
+    /// Replaces what was read — after "Check again online" — and compares again.
+    func reread(_ invoice: ParsedInvoice, source: VerificationSource, fallbackReason: String?,
+                against payment: Payment) {
+        invoiceJSON = (try? JSONEncoder().encode(invoice)) ?? Data()
+        sourceRaw = source.rawValue
+        self.fallbackReason = fallbackReason
+        checkedAt = .now
+        refresh(against: payment)
+    }
+
     /// The comparison as it stands for the payment now.
     func result(for payment: Payment) -> VerificationResult {
         ReceiptVerifier.verify(invoice, against: .init(payment), source: source)
