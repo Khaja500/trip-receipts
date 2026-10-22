@@ -35,10 +35,12 @@ class Handler(BaseHTTPRequestHandler):
     timeout = 30
 
     def do_GET(self):
+        started = time.monotonic()
         if self.path == "/healthz":
             self._send(200, {"ok": True, "version": VERSION, "server_ocr": ocr.available()})
         else:
             self._send(404, {"error": "Not found."})
+        self._log(started)
 
     def do_POST(self):
         started = time.monotonic()

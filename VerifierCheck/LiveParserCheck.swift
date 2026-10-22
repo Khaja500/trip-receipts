@@ -105,13 +105,15 @@ enum LiveParserCheck {
         let payment = VerifierCases.paid(486, to: "UBER INDIA", at: "2025-10-12 09:41")
         let down = InvoiceParseClient(server: URL(string: "http://127.0.0.1:9")!, tokens: MemoryTokens())
         await expectFallback("server off → unverified, never a warning", client: down, pdf: pdf,
-                             payment: payment, error: .unreachable, report: report)
+                             payment: payment, report: report) {
+            if case .unreachable = $0 { return true } else { return false }
+        }
 
         // A server that never answers: cut off at the timeout.
         var slow = InvoiceParseClient(server: silent, tokens: MemoryTokens("tr1.x.1.0"))
         slow.timeout = 2
         await expectFallback("server silent past the timeout → unverified", client: slow, pdf: pdf,
-                             payment: payment, error: .timedOut, report: report)
+                             payment: payment, report: report) { $0 == .timedOut }
 
         print("")
         if failures == 0 {
@@ -126,8 +128,8 @@ enum LiveParserCheck {
     /// (here, a total of ₹842 that would otherwise be a mismatch) stands in.
     private static func expectFallback(
         _ label: String, client: InvoiceParseClient, pdf: Data,
-        payment: ReceiptVerifier.PaymentSide, error expected: InvoiceParseError,
-        report: (String, [String]) -> Void
+        payment: ReceiptVerifier.PaymentSide,
+        report: (String, [String]) -> Void, expected: (InvoiceParseError) -> Bool
     ) async {
         do {
             _ = try await client.parse(pdf, filename: "uber.pdf", text: nil, hints: .init(payment))
@@ -137,7 +139,7 @@ enum LiveParserCheck {
             let result = ReceiptVerifier.verify(onDevice, against: payment, source: .onDevice,
                                                 calendar: VerifierCases.calendar)
             var problems: [String] = []
-            if error != expected { problems.append("error \(error), wanted \(expected)") }
+            if !expected(error) { problems.append("unexpected error \(error)") }
             if result.status != .unverified { problems.append("status \(result.status.rawValue)") }
             report(label + " (\(error.localizedDescription))", problems)
         } catch {

@@ -145,6 +145,14 @@ struct SetupView: View {
             }
             .disabled(InvoiceParseClient.serverURL(from: parserServer) == nil || checkingParser)
 
+            if !parserServer.trimmingCharacters(in: .whitespaces).isEmpty
+                && InvoiceParseClient.serverURL(from: parserServer) == nil {
+                Label("That isn't an address the app can use — try 192.168.1.20:8787 "
+                      + "or https://parser.example.com", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
+
             if let parserStatus {
                 Label(parserStatus.text,
                       systemImage: parserStatus.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -280,7 +288,11 @@ struct SetupView: View {
     // MARK: - Actions
 
     private func checkParser() async {
-        guard let client = InvoiceParseClient.configured() else { return }
+        guard let client = InvoiceParseClient.configured() else {
+            parserStatus = (false, "Enter the parser's address first.")
+            return
+        }
+        parserStatus = nil
         checkingParser = true
         defer { checkingParser = false }
         do {

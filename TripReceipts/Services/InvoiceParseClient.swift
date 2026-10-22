@@ -140,7 +140,7 @@ struct InvoiceParseClient {
         } catch let error as URLError where error.code == .timedOut {
             throw InvoiceParseError.timedOut
         } catch {
-            throw InvoiceParseError.unreachable
+            throw InvoiceParseError.unreachable(reason: error.localizedDescription)
         }
     }
 
@@ -196,7 +196,10 @@ extension InvoiceParseClient.Hints {
 }
 
 enum InvoiceParseError: LocalizedError, Equatable {
-    case unreachable
+    /// With iOS's own words for why — "local network prohibited", "server
+    /// with the specified hostname could not be found" — which is what a
+    /// self-hosted setup needs to see.
+    case unreachable(reason: String)
     case timedOut
     case unreadableAnswer
     case rejected(status: Int, message: String?)
@@ -208,8 +211,8 @@ enum InvoiceParseError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unreachable:
-            "Couldn't reach the parser server."
+        case .unreachable(let reason):
+            "Couldn't reach the parser server: \(reason)"
         case .timedOut:
             "The parser took longer than \(Int(VerifierRules.parserTimeout)) seconds."
         case .unreadableAnswer:
