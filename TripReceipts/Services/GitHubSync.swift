@@ -4,7 +4,9 @@ import SwiftData
 import UIKit
 
 /// Mirrors the store to `transactions.json` in a private GitHub repo, which
-/// the website reads. Off until a repo and token are saved in Setup.
+/// the website reads. Off until a repo and token are saved in Setup. With a
+/// shared repo set as well, a work-only copy goes there too, for someone else
+/// to read with their own read-only token.
 ///
 /// The whole snapshot is rewritten after each change rather than patched: the
 /// phone is the only writer, so the latest file is always the truth and a
@@ -23,11 +25,15 @@ final class GitHubSync {
         var enabled = false
         var owner = ""
         var repo = ""
+        /// Optional, same owner and token. Gets `SyncSnapshot.workOnly()`.
+        var shareRepo = ""
         /// Fixed rather than configurable; the website reads the same path.
         var path = "transactions.json"
 
         var isComplete: Bool { !owner.isEmpty && !repo.isEmpty }
+        var isSharing: Bool { !shareRepo.isEmpty }
         var fullName: String { "\(owner)/\(repo)" }
+        var shareFullName: String { "\(owner)/\(shareRepo)" }
     }
 
     private(set) var settings: Settings
@@ -35,6 +41,8 @@ final class GitHubSync {
     private(set) var isSyncing = false
     private(set) var lastSyncedAt: Date?
     private(set) var lastError: String?
+    /// The shared copy fails on its own — usually a token that can't see that repo.
+    private(set) var shareError: String?
 
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
@@ -47,11 +55,14 @@ final class GitHubSync {
         static let enabled = "sync.enabled"
         static let owner = "sync.owner"
         static let repo = "sync.repo"
+        static let shareRepo = "sync.shareRepo"
         static let lastSyncedAt = "sync.lastSyncedAt"
         /// Digest of the last snapshot that went up, and the blob SHA GitHub
         /// gave it — both forgotten when the repo changes.
         static let pushedDigest = "sync.pushedDigest"
         static let remoteSHA = "sync.remoteSHA"
+        static let sharePushedDigest = "sync.share.pushedDigest"
+        static let shareRemoteSHA = "sync.share.remoteSHA"
     }
 
     private init() {
@@ -59,7 +70,8 @@ final class GitHubSync {
         settings = Settings(
             enabled: defaults.bool(forKey: Key.enabled),
             owner: defaults.string(forKey: Key.owner) ?? "",
-            repo: defaults.string(forKey: Key.repo) ?? ""
+            repo: defaults.string(forKey: Key.repo) ?? "",
+            shareRepo: defaults.string(forKey: Key.shareRepo) ?? ""
         )
         hasToken = Self.keychain.read() != nil
         lastSyncedAt = defaults.object(forKey: Key.lastSyncedAt) as? Date
@@ -67,9 +79,14 @@ final class GitHubSync {
 
     var isActive: Bool { settings.enabled && settings.isComplete && hasToken }
 
-    var websiteLink: URL {
-        var components = URLComponents(string: Self.websiteURL)!
-        components.fragment = "repo=\(settings.fullName)"
+    var websiteLink: URL { Self.websiteLink(repo: settings.fullName) }
+
+    /// What to send whoever reads the shared repo, alongside their token.
+    var shareWebsiteLink: URL { Self.websiteLink(repo: settings.shareFullName) }
+
+    private static func websiteLink(repo: String) -> URL {
+        var components = URLComponents(string: websiteURL)!
+        components.fragment = "repo=\(repo)"
         return components.url!
     }
 
@@ -80,6 +97,7 @@ final class GitHubSync {
         var new = new
         new.owner = new.owner.trimmingCharacters(in: .whitespacesAndNewlines)
         new.repo = new.repo.trimmingCharacters(in: .whitespacesAndNewlines)
+        new.shareRepo = new.shareRepo.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let token = token?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
             Self.keychain.save(token)
@@ -91,11 +109,17 @@ final class GitHubSync {
             lastSyncedAt = nil
             defaults.removeObject(forKey: Key.lastSyncedAt)
         }
+        if new.shareFullName != settings.shareFullName {
+            defaults.removeObject(forKey: Key.sharePushedDigest)
+            defaults.removeObject(forKey: Key.shareRemoteSHA)
+        }
         settings = new
         defaults.set(new.enabled, forKey: Key.enabled)
         defaults.set(new.owner, forKey: Key.owner)
         defaults.set(new.repo, forKey: Key.repo)
+        defaults.set(new.shareRepo, forKey: Key.shareRepo)
         lastError = nil
+        shareError = nil
     }
 
     func forgetToken() {
@@ -159,38 +183,70 @@ final class GitHubSync {
 
     // MARK: - Upload
 
+    /// The full snapshot first, then the work-only copy; one failing doesn't
+    /// stop the other.
     private func push(force: Bool) async {
         guard isActive, let token = Self.keychain.read() else { return }
         let target = settings
 
+        let snapshot: SyncSnapshot
         do {
-            let snapshot = try SyncSnapshot.build(context: ModelContext(ModelContainer.shared))
-            let digest = try snapshot.contentDigest()
-            if !force, digest == defaults.string(forKey: Key.pushedDigest) { return }
+            snapshot = try SyncSnapshot.build(context: ModelContext(ModelContainer.shared))
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
 
-            isSyncing = true
-            defer { isSyncing = false }
-
-            let file = GitHubFile(token: token, owner: target.owner, repo: target.repo, path: target.path)
-            let sha = try await file.write(
-                try snapshot.encoded(),
-                message: Self.commitMessage(for: snapshot),
-                knownSHA: defaults.string(forKey: Key.remoteSHA)
-            )
-
-            // The repo was changed while this was in the air; its state is not ours.
-            guard target == settings else { return }
-            defaults.set(digest, forKey: Key.pushedDigest)
-            defaults.set(sha, forKey: Key.remoteSHA)
-            lastSyncedAt = .now
-            defaults.set(lastSyncedAt, forKey: Key.lastSyncedAt)
+        do {
+            if try await upload(snapshot, to: \.repo, of: target, token: token, force: force,
+                                digestKey: Key.pushedDigest, shaKey: Key.remoteSHA) {
+                lastSyncedAt = .now
+                defaults.set(lastSyncedAt, forKey: Key.lastSyncedAt)
+            }
             lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
+
+        guard target.isSharing else { return }
+        do {
+            try await upload(snapshot.workOnly(), to: \.shareRepo, of: target, token: token, force: force,
+                             digestKey: Key.sharePushedDigest, shaKey: Key.shareRemoteSHA)
+            shareError = nil
+        } catch {
+            shareError = error.localizedDescription
+        }
+    }
+
+    /// Writes the snapshot to one repo unless that repo already has this
+    /// content. True when it uploaded.
+    @discardableResult
+    private func upload(_ snapshot: SyncSnapshot, to repo: KeyPath<Settings, String>, of target: Settings,
+                        token: String, force: Bool, digestKey: String, shaKey: String) async throws -> Bool {
+        let digest = try snapshot.contentDigest()
+        if !force, digest == defaults.string(forKey: digestKey) { return false }
+
+        isSyncing = true
+        defer { isSyncing = false }
+
+        let file = GitHubFile(token: token, owner: target.owner, repo: target[keyPath: repo], path: target.path)
+        let sha = try await file.write(
+            try snapshot.encoded(),
+            message: Self.commitMessage(for: snapshot),
+            knownSHA: defaults.string(forKey: shaKey)
+        )
+
+        // The repo was changed while this was in the air; its state is not ours.
+        guard settings.owner == target.owner, settings[keyPath: repo] == target[keyPath: repo] else { return false }
+        defaults.set(digest, forKey: digestKey)
+        defaults.set(sha, forKey: shaKey)
+        return true
     }
 
     private static func commitMessage(for snapshot: SyncSnapshot) -> String {
+        if snapshot.scope != nil {
+            return "Sync from iPhone: \(snapshot.payments.count) work expenses, \(snapshot.trips.count) trips"
+        }
         let count = { (status: PaymentStatus) in
             snapshot.payments.filter { $0.status == status.rawValue }.count
         }

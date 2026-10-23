@@ -225,6 +225,37 @@ Content-Security-Policy blocks any other destination.
 `docs/sample.json` is invented data in the exact synced shape, with real
 fingerprints; *Look around with sample data* on the site loads it.
 
+### Sharing a work-only view
+
+To let someone else — a professor, a manager — follow the work expenses
+without seeing anything personal, the phone writes a second copy:
+
+```
+app → GitHubSync → transactions.json in the private repo          (everything, as above)
+                 → transactions.json in a second private repo     (work expenses + trips only)
+                 ← their browser, with their own read-only token
+```
+
+The second copy is `SyncSnapshot.workOnly()`: work payments with their
+original SMS and fingerprint, and the trips, marked `"scope": "work"`. Waiting
+and personal payments are never written to it, so its history holds none
+either. The site sees the scope and drops the Inbox, the waiting count and
+the personal filter.
+
+1. **A second private repo**, e.g. `trip-receipts-shared`.
+2. **Phone token:** GitHub → the phone's fine-grained token → *Edit* → add the
+   second repo to its repository access (still *Contents: Read and write*).
+3. **Phone:** Setup → Website → *Shared repo* → `trip-receipts-shared` →
+   *Save and sync now*. A problem with that repo shows on its own line.
+4. **Their token:** a new fine-grained token with *Repository access: only
+   trip-receipts-shared* and *Contents: Read-only*. Pick an expiry that
+   covers how long they need it, and revoke it when they're done.
+5. **Send** *Send the work-only link* from Setup (it carries the repo, never
+   a token) and, separately, their token. They paste it once; the page then
+   follows every 30 s.
+
+`#demo=work` on the site shows the sample data as a shared repo would hold it.
+
 ## Privacy
 
 SMS parsing and storage happen on the iPhone. There is no account. Only
@@ -238,7 +269,9 @@ read off it — is sent to that server, nothing else. The server processes it in
 memory and logs only method, path, status, size and time.
 
 With website sync on, the payments and trips — including the original SMS
-text — are also copied to the private repo you chose. Every sync is a commit,
+text — are also copied to the private repo you chose. With a shared repo set,
+work expenses and trips — with their SMS text — are copied to that one too,
+for whoever holds its read-only token. Every sync is a commit,
 so the repo's history keeps older snapshots, including personal payments the
 phone has since deleted. Deleting that repo removes all of it.
 

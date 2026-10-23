@@ -177,6 +177,7 @@ svg.icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentCol
   background: var(--surface-2); color: var(--ink); font-size: 13px; font-weight: 650;
 }
 .steps strong { color: var(--ink); }
+.shared-note { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-2); max-width: 34em; }
 .connect-form { padding: 24px; display: grid; gap: 16px; }
 .connect-form hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 .connected-as { margin: 0; font-size: 14px; color: var(--ink-2); }

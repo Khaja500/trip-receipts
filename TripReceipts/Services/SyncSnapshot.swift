@@ -14,6 +14,9 @@ struct SyncSnapshot: Codable, Equatable {
 
     var schema = SyncSnapshot.schemaVersion
     var generatedAt: Date
+    /// "work" on the copy written for someone else to read (see `workOnly`);
+    /// absent on the full snapshot, so that file is unchanged.
+    var scope: String?
     var payments: [PaymentRecord]
     var trips: [TripRecord]
 
@@ -101,6 +104,16 @@ extension SyncSnapshot {
             payments: payments.map(PaymentRecord.init),
             trips: trips.map(TripRecord.init)
         )
+    }
+
+    /// What the shared repo gets: work expenses and the trips they're filed
+    /// under, each with its original message as proof. Waiting and personal
+    /// payments never leave in this copy.
+    func workOnly() -> SyncSnapshot {
+        var copy = self
+        copy.scope = "work"
+        copy.payments = payments.filter { $0.status == PaymentStatus.work.rawValue }
+        return copy
     }
 
     /// Pretty-printed with sorted keys, so each sync is a readable diff in

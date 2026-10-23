@@ -207,6 +207,10 @@ struct SetupView: View {
                     SecureField(sync.hasToken ? "Saved · paste to replace" : "github_pat_…", text: $syncToken)
                         .multilineTextAlignment(.trailing)
                 }
+                LabeledContent("Shared repo") {
+                    TextField("optional · work only", text: $syncForm.shareRepo)
+                        .multilineTextAlignment(.trailing)
+                }
 
                 Button {
                     sync.configure(syncForm, token: syncToken)
@@ -224,6 +228,18 @@ struct SetupView: View {
                         Label("Open the website", systemImage: "safari")
                     }
                 }
+
+                if sync.isActive && sync.settings.isSharing {
+                    if let error = sync.shareError {
+                        Label("Shared repo: \(error)", systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                    }
+                    ShareLink(item: sync.shareWebsiteLink,
+                              message: Text("My work-travel expenses, live. Paste the read-only token I send separately.")) {
+                        Label("Send the work-only link", systemImage: "square.and.arrow.up")
+                    }
+                }
             }
         } header: {
             Text("Website")
@@ -231,7 +247,10 @@ struct SetupView: View {
             Text("After every change, all payments and trips are written to transactions.json in "
                  + "a private GitHub repo, and the website reads them from there. Receipt images "
                  + "stay on this iPhone. Use a fine-grained token that can see only that repo, "
-                 + "with Contents set to Read and write.")
+                 + "with Contents set to Read and write.\n\n"
+                 + "A shared repo gets only work expenses and trips, with their bank messages — "
+                 + "never waiting or personal payments. Give the same token access to it, and the "
+                 + "reader their own read-only token for that repo alone.")
         }
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
@@ -270,6 +289,10 @@ struct SetupView: View {
                 if sync.isActive {
                     Label("Payments and trips sync to your private repo \(sync.settings.fullName)",
                           systemImage: "arrow.triangle.2.circlepath")
+                    if sync.settings.isSharing {
+                        Label("Work expenses only are copied to \(sync.settings.shareFullName)",
+                              systemImage: "person.2")
+                    }
                 }
                 if let parserHost {
                     Label("Receipts you attach are read by \(parserHost), which keeps nothing",

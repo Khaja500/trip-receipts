@@ -4,7 +4,9 @@
    Reads transactions.json, which the iPhone app rewrites in a private GitHub
    repo after every change, and shows it. Read-only: the phone is the only
    writer. Everything runs in this browser; the token is sent to
-   api.github.com and nowhere else. */
+   api.github.com and nowhere else.
+   A shared repo holds the work-only copy ("scope": "work"), for someone else
+   to follow: no Inbox, nothing waiting, nothing personal. */
 
 const API = 'https://api.github.com';
 const DATA_PATH = 'transactions.json';
@@ -279,6 +281,7 @@ function derive(data) {
   const payments = [...data.payments].sort(byPaid);
   const trips = [...data.trips].sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
   return {
+    shared: data.scope === 'work',
     payments,
     trips,
     tripsById: new Map(trips.map((t) => [t.id, t])),
@@ -391,13 +394,19 @@ async function startLive(connection) {
   if (state.snapshot) startPolling();
 }
 
-async function startDemo() {
+/** #demo=work shows the sample as a shared repo would hold it. */
+async function startDemo(workOnly = false) {
   clearInterval(state.timer);
   Object.assign(state, { mode: 'demo', raw: '', snapshot: null, error: null });
   state.firstSeen.clear();
   showDashboard();
   const res = await fetch('sample.json', { cache: 'no-cache' });
-  applySnapshot(await res.text());
+  let text = await res.text();
+  if (workOnly) {
+    const data = JSON.parse(text);
+    text = JSON.stringify({ ...data, scope: 'work', payments: data.payments.filter((p) => p.status === 'work') });
+  }
+  applySnapshot(text);
 }
 
 function startPolling() {
@@ -507,6 +516,11 @@ function renderChrome() {
 
   const waiting = state.view?.pending.length || 0;
   document.title = waiting ? `(${waiting}) Trip Receipts` : 'Trip Receipts';
+  $('footer-text').textContent = state.view?.shared
+    ? 'Read-only, work expenses only. Updated from the iPhone as expenses are filed; this page follows within half a minute. '
+      + 'Receipt images stay on the phone.'
+    : 'Read-only. Answer payments, add receipts and edit trips on the iPhone; this page follows within half a minute. '
+      + 'Receipt images stay on the phone.';
 }
 
 function renderTiles() {
@@ -515,6 +529,7 @@ function renderTiles() {
   const tripsWithWork = new Set(v.work.map((p) => p.tripID).filter(Boolean)).size;
   const active = tripCovering(new Date());
   const latest = v.trips[0];
+  const newest = [...v.work].sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt))[0];
 
   const tile = (label, value, sub, cls = '') => h('div', { class: `card tile ${cls}` },
     h('div', { class: 'tile-label' }, label),
@@ -524,8 +539,11 @@ function renderTiles() {
   $('tiles').replaceChildren(
     tile('To claim', moneyList(totals(v.work, (p) => p.netClaimable)),
       `${plural(v.work.length, 'work expense')}${tripsWithWork ? ` across ${plural(tripsWithWork, 'trip')}` : ''}`, 'hero'),
-    tile('Waiting for an answer', String(v.pending.length),
-      v.pending.length ? `${moneyList(totals(v.pending, (p) => p.amount))} · answer on the phone` : 'Every payment answered'),
+    v.shared
+      ? tile('Latest expense', newest ? money(newest.netClaimable, newest.currency) : '—',
+        newest ? `${newest.merchant || 'Unknown payee'} · ${dayText(new Date(newest.paidAt))}` : 'None filed yet')
+      : tile('Waiting for an answer', String(v.pending.length),
+        v.pending.length ? `${moneyList(totals(v.pending, (p) => p.amount))} · answer on the phone` : 'Every payment answered'),
     tile('Missing receipts', String(missing.length),
       missing.length ? h('span', { class: 'warn-text' }, `${moneyList(totals(missing, (p) => p.netClaimable))} unsupported`)
         : (v.work.length ? 'Every expense has one' : 'Nothing to support yet')),
@@ -536,6 +554,8 @@ function renderTiles() {
 }
 
 function renderTabs() {
+  $('tab-inbox').hidden = state.view.shared;
+  if (state.view.shared && state.tab === 'inbox') state.tab = 'expenses';
   for (const tab of document.querySelectorAll('[role="tab"]')) {
     const selected = tab.dataset.tab === state.tab;
     tab.setAttribute('aria-selected', String(selected));
@@ -753,6 +773,7 @@ function tripsPanel() {
 function allPanel() {
   const v = state.view;
   const query = state.search.trim().toLowerCase();
+  if (v.shared) state.allStatus = 'all';
   let shown = state.allStatus === 'all' ? v.payments : v.payments.filter((p) => p.status === state.allStatus);
   if (query) {
     shown = shown.filter((p) => [p.merchant, p.rawMessage, p.reference, p.instrument, p.bank, p.notes,
@@ -760,7 +781,7 @@ function allPanel() {
   }
 
   const head = h('div', { class: 'panel-head' },
-    chips([['all', 'All'], ['pending', 'Waiting'], ['work', 'Work'], ['personal', 'Personal']],
+    !v.shared && chips([['all', 'All'], ['pending', 'Waiting'], ['work', 'Work'], ['personal', 'Personal']],
       state.allStatus, (value) => { state.allStatus = value; renderPanel(); }),
     h('div', { class: 'toolbar' },
       h('input', {
@@ -1016,7 +1037,8 @@ function init() {
     tab.addEventListener('keydown', (e) => {
       const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (!step) return;
-      const next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
+      const shown = tabs.filter((t) => !t.hidden);
+      const next = shown[(shown.indexOf(tab) + step + shown.length) % shown.length];
       next.focus();
       selectTab(next.dataset.tab);
     });
@@ -1035,7 +1057,7 @@ function init() {
   const linkedRepo = params.get('repo');
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 
-  if (params.has('demo')) return startDemo();
+  if (params.has('demo')) return startDemo(params.get('demo') === 'work');
   const saved = loadConnection();
   if (saved && (!linkedRepo || linkedRepo === saved.repo)) return startLive(saved);
   return showConnect({ repo: linkedRepo || saved?.repo || '' });
