@@ -1,0 +1,7 @@
+fixtures/
+check_fixtures.py
+README.md
+Dockerfile
+.dockerignore
+**/__pycache__
+**/.DS_Store

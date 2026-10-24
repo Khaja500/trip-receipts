@@ -160,7 +160,8 @@ and a confidence per field. Files are read in memory and never stored or
 logged. See `invoice-parser/README.md` to run or host it, then put its address
 in Setup → *Receipt check*. In the simulator, run it on this Mac and use
 `127.0.0.1:8787`; on the phone it needs to be hosted (HTTPS) or reachable on
-your network.
+your network. It is hosted on Google Cloud Run (`invoice-parser/README.md` →
+*Cloud Run*), so the phone can reach it from anywhere, any time.
 
 ## Export
 
@@ -292,8 +293,9 @@ Carried over from the spec, and still true:
   on the next change or the next time the app is left.
 - Fine-grained tokens expire (you pick when). The phone's Setup and the
   website both say so when GitHub refuses one.
-- The receipt check needs the parser server to be running somewhere the phone
-  can reach; until it is hosted, every receipt is ○ unverified. The parser is
+- The receipt check needs the parser to be reachable; offline, or if Cloud
+  Run is ever slower than 10 s, a receipt is ○ unverified until *Check again
+  online*. The parser is
   rule-based and tuned on Indian invoices; a misread invoice raises a warning
   you can add past, and should become a fixture.
 - Foreign-currency invoices aren't compared (no exchange rates yet).

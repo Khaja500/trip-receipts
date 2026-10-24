@@ -17,7 +17,7 @@ python3 check_fixtures.py                  # every fixture read as expected
 
 | Call | Does |
 |---|---|
-| `GET /healthz` | `{"ok": true, "version": "1", "server_ocr": false}` |
+| `GET /v1/health` | `{"ok": true, "version": "1", "server_ocr": false}`. Also `/healthz` locally; Cloud Run answers that path itself. |
 | `POST /v1/install` | `{"token": "tr1…"}` — one per app install, 10 per hour per address |
 | `POST /v1/parse` | multipart: `file` (PDF, JPEG, PNG, HEIC), optional `text` (what the phone read), optional `hints` (JSON). `Authorization: Bearer <token>`. 20 a minute, 400 a day per token. |
 
@@ -69,7 +69,27 @@ HTTP for addresses on your own network). Set:
 
 - `PARSER_TOKEN_SECRET` — a long random string, so tokens survive restarts.
 - `PORT` / `HOST` — where to listen.
-- `PARSER_TRUST_PROXY=1` — only behind a proxy that sets `X-Forwarded-For`.
+- `PARSER_TRUST_PROXY=1` — only behind a proxy that sets `X-Forwarded-For`
+  as its first entry. Leave it off on Cloud Run, which appends the caller
+  last: installs are then limited per host rather than per caller, which is
+  plenty for one phone.
+
+### Cloud Run
+
+`Dockerfile` builds it; Cloud Run gives a fixed `https://….run.app` address,
+scales to zero when idle and wakes in a second or two — inside the app's 10 s
+limit — so the phone can always reach it at no cost at this volume.
+
+```
+gcloud run deploy invoice-parser --source . --region asia-south1 \
+  --allow-unauthenticated --max-instances 2 --memory 512Mi --timeout 30 \
+  --set-env-vars PARSER_TOKEN_SECRET=$(openssl rand -hex 32)
+```
+
+Run it from this folder. Deploy again with the same command, minus
+`--set-env-vars`, to ship a change without signing out every install. Then
+put the printed address in the app: Setup → *Receipt check* → *Check
+connection*.
 
 ## Fixtures
 

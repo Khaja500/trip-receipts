@@ -5,7 +5,7 @@
     python3 server.py --host 0.0.0.0 --port 8080
 
 Endpoints
-    GET  /healthz     {"ok": true, ...}
+    GET  /v1/health   {"ok": true, ...}  (also /healthz, which Cloud Run keeps for itself)
     POST /v1/install  issues a per-install token
     POST /v1/parse    multipart: file (+ optional text, hints) -> fields as JSON
 
@@ -36,7 +36,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         started = time.monotonic()
-        if self.path == "/healthz":
+        if self.path in ("/v1/health", "/healthz"):
             self._send(200, {"ok": True, "version": VERSION, "server_ocr": ocr.available()})
         else:
             self._send(404, {"error": "Not found."})

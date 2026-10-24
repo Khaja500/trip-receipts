@@ -64,7 +64,7 @@ struct InvoiceParseClient {
         let session = makeSession()
         defer { session.finishTasksAndInvalidate() }
 
-        var request = URLRequest(url: server.appendingPathComponent("healthz"))
+        var request = URLRequest(url: server.appendingPathComponent("v1/health"))
         request.httpMethod = "GET"
         let (data, status) = try await send(request, session)
         guard status == 200,

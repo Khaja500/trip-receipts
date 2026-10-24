@@ -1,0 +1,6 @@
+# What `gcloud run deploy --source` uploads to Cloud Build: the server, not
+# the fixtures.
+.gcloudignore
+fixtures/
+**/__pycache__
+**/.DS_Store
