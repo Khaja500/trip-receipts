@@ -1,0 +1,15 @@
+Swiggy
+Order ID: 168234567890
+Order placed: 14 Oct 2025, 9:05 PM
+Delivered to: Viman Nagar, Pune
+Paneer Butter Masala x1 ₹320.00
+Garlic Naan x2 ₹120.00
+Item Total ₹440.00
+Delivery partner fee ₹45.00
+Taxes and charges ₹45.00
+Grand Total ₹530.00
+Coupon SAVE80 -₹80.00
+Total Payment ₹450.00
+Paid via UPI
+Bundl Technologies Private Limited
+-- Test fixture for invoice-parser: invented data, not a real receipt --

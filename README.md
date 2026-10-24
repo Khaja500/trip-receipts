@@ -154,7 +154,9 @@ from the phone alone is never a warning.
 ### The parser server
 
 `invoice-parser/` is a small stateless service: `POST /v1/parse` takes a
-receipt (PDF, JPEG, PNG, HEIC) and returns merchant, total, currency, tax,
+receipt (PDF, JPEG, PNG, HEIC) and returns merchant, total (the amount
+actually paid — *Total payment*, *Amount paid* — ahead of the grand total, so a
+coupon or a tip doesn't make a good receipt look wrong), currency, tax,
 invoice date and time, invoice number, line items, any stay or travel window,
 and a confidence per field. Files are read in memory and never stored or
 logged. See `invoice-parser/README.md` to run or host it, then put its address

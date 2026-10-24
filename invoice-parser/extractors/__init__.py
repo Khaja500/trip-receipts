@@ -32,8 +32,10 @@ def extract(text: str, hints: dict | None = None) -> dict:
     lines = common.clean_lines(text)
     profile = detect("\n".join(lines))
 
-    labels = profile.total_labels + tuple(
-        item for item in common.GENERIC_TOTALS if item[0] not in dict(profile.total_labels))
+    # What was paid first, then the type's own labels, then the generic ones.
+    labels = ()
+    for group in (common.PAID_TOTALS, profile.total_labels, common.GENERIC_TOTALS):
+        labels += tuple(item for item in group if item[0] not in dict(labels))
     total, total_currency = common.find_total(lines, labels)
     currency = common.find_currency(lines, total_currency, hints.get("currency"))
     dates = common.find_dates(lines, profile)

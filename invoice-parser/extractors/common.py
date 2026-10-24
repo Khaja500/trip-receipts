@@ -33,14 +33,25 @@ class Profile:
         return sum(weight for pattern, weight in self.keywords if re.search(pattern, text))
 
 
+# What was actually paid — the figure the bank SMS carries — so it outranks
+# every type's own labels: below the grand total after a coupon, above it with
+# a tip. Only labels that name an amount: "Paid by Visa ••4455" would read the
+# card digits as one.
+PAID_TOTALS: tuple[tuple[str, float], ...] = (
+    ("total payment", 0.95), ("total payments", 0.95), ("payment total", 0.95),
+    ("total amount paid", 0.95), ("amount paid", 0.95), ("total paid", 0.95),
+    ("paid amount", 0.95), ("net paid", 0.95), ("you paid", 0.95),
+    ("amount charged", 0.95), ("total charged", 0.95),
+    ("amount received", 0.9), ("payment received", 0.9),
+)
+
 GENERIC_TOTALS: tuple[tuple[str, float], ...] = (
     ("grand total", 0.95), ("total amount payable", 0.95), ("net amount payable", 0.95),
     ("total payable", 0.95), ("amount payable", 0.95), ("net payable", 0.95),
     ("total invoice value", 0.95), ("total invoice amount", 0.95), ("invoice total", 0.95),
-    ("total amount paid", 0.95), ("amount paid", 0.9), ("total paid", 0.9), ("paid amount", 0.9),
-    ("amount charged", 0.9), ("total charged", 0.9), ("total bill", 0.9), ("bill amount", 0.9),
-    ("bill total", 0.9), ("total fare", 0.9), ("total amount", 0.9), ("invoice value", 0.85),
-    ("net amount", 0.85), ("total", 0.85), ("amount", 0.65),
+    ("total bill", 0.9), ("bill amount", 0.9), ("bill total", 0.9), ("total fare", 0.9),
+    ("total amount", 0.9), ("invoice value", 0.85), ("net amount", 0.85), ("total", 0.85),
+    ("amount", 0.65),
 )
 
 # Lines carrying a figure that is not what was paid.
@@ -52,6 +63,10 @@ NOT_THE_TOTAL = (
     "in words", "tip", "change", "tendered", "advance", "deposit", "balance", "previous",
     "wallet", "points", "mrp", "per night", "per km", "rate", "price per", "base fare",
 )
+
+# "(incl. tip)", "including taxes": says what a total covers, so the words in
+# it don't count against the line.
+INCLUDED = re.compile(r"\(?\b(?:incl\.?|including|inclusive of)\s[^)\d₹$€£]*\)?")
 
 GENERIC_DATE_LABELS = (
     "invoice date", "date of invoice", "inv date", "invoice dt", "bill date", "bill dt",
@@ -284,7 +299,7 @@ def find_total(lines: list[str], labels) -> tuple[Found | None, str | None]:
     best = None  # (rank, line index, amount, confidence)
     for i, line in enumerate(lines):
         lower = line.lower()
-        if has_any(lower, NOT_THE_TOTAL):
+        if has_any(INCLUDED.sub(" ", lower), NOT_THE_TOTAL):
             continue
         for rank, (label, confidence) in enumerate(labels):
             match = has_label(lower, label)
@@ -515,7 +530,7 @@ def find_line_items(lines: list[str], until: int) -> list[dict]:
     items = []
     for line in lines[:until if until >= 0 else len(lines)]:
         lower = line.lower()
-        if has_any(lower, NOT_THE_TOTAL) or has_any(lower, [label for label, _ in GENERIC_TOTALS]):
+        if has_any(lower, NOT_THE_TOTAL) or has_any(lower, [label for label, _ in PAID_TOTALS + GENERIC_TOTALS]):
             continue
         if has_any(lower, INVOICE_NUMBER_LABELS) or dates_in(line) or times_in(line):
             continue

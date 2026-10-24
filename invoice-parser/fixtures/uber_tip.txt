@@ -1,0 +1,12 @@
+Uber
+Thanks for tipping, Arjun
+16 October 2025, 6:25 pm
+Trip fare ₹430.00
+Booking fee ₹20.00
+Total fare ₹450.00
+Tip for driver ₹50.00
+Total paid (incl. tip) ₹500.00
+Payments
+Visa ••4455
+Uber India Systems Private Limited
+-- Test fixture for invoice-parser: invented data, not a real receipt --

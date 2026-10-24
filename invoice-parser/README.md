@@ -55,6 +55,17 @@ payment would make the check an echo.
 3. **Fields.** The type's labels, most trusted first (`extractors/common.py`).
    Unlabelled guesses get a confidence under 0.6, which the app treats as not
    read — so an ambiguous bill comes back *unverified* rather than *wrong*.
+4. **The total is what was paid.** A line naming the payment — *Total
+   payment*, *Amount paid*, *Total paid*, *You paid*, *Amount charged*,
+   *Amount received* (`PAID_TOTALS`) — beats every other total, since that is
+   the figure the bank SMS carries: below the grand total after a coupon,
+   above it with a tip. Only then the type's labels (*Total fare*, *Grand
+   total*, …), then the generic ones. "(incl. tip)" or "including taxes"
+   beside it doesn't disqualify the line. Still skipped: advances, deposits,
+   balances, wallet and points lines, zero amounts, and *Paid by* / *Paid via*,
+   which are usually followed by card digits rather than an amount. With a
+   split payment, the last paid line wins — the card or UPI share the bank
+   reported.
 
 ## Privacy
 
