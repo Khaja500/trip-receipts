@@ -16,6 +16,7 @@ struct TripReceiptsApp: App {
                     await NotificationManager.requestAuthorization()
                     let store = PaymentStore(context: ModelContext(ModelContainer.shared))
                     store.purgeOldPersonal()
+                    store.unfileOutsideTrips()
                     await NotificationManager.updatePendingReminder(count: store.pendingCount())
                     GitHubSync.shared.scheduleSync()
                 }

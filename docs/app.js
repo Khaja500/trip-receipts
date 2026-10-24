@@ -30,9 +30,7 @@ const CATEGORIES = {
   other: ['Other', false],
 };
 
-// Mirrors TripWindow: a trip claims the day before it starts and two after it ends.
-const TRIP_DAYS_BEFORE = 1;
-const TRIP_DAYS_AFTER = 2;
+// Mirrors TripWindow: a trip claims its own dates — first day to last — and no more.
 
 const STATUS = {
   pending: { label: 'Waiting', cls: 'waiting' },
@@ -194,10 +192,8 @@ const isTravel = (key) => (CATEGORIES[key] || CATEGORIES.other)[1];
 
 function tripWindow(trip) {
   const from = new Date(trip.startDate);
-  from.setDate(from.getDate() - TRIP_DAYS_BEFORE);
   from.setHours(0, 0, 0, 0);
   const to = new Date(trip.endDate);
-  to.setDate(to.getDate() + TRIP_DAYS_AFTER);
   to.setHours(23, 59, 59, 999);
   return [from, to];
 }

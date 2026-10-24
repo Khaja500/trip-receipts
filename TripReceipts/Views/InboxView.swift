@@ -103,9 +103,10 @@ struct InboxView: View {
                         } label: {
                             Label("Work travel", systemImage: "suitcase.fill")
                         }
-                        if !trips.isEmpty {
+                        let eligible = trips.filter { $0.covers(payment.paidAt) }
+                        if !eligible.isEmpty {
                             Menu("File into trip") {
-                                ForEach(trips) { trip in
+                                ForEach(eligible) { trip in
                                     Button(trip.name) {
                                         store.markWork(payment, trip: trip)
                                         refreshReminder()

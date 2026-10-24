@@ -124,31 +124,32 @@ enum RulesCheck {
 
         // MARK: Trip dates
 
-        check("a trip claims the day before and two days after") {
+        check("a trip claims its own dates and not a day more") {
             let start = iso("2025-10-12T00:00:00Z")
             let end = iso("2025-10-13T00:00:00Z")
             var problems: [String] = []
-            if !TripWindow.covers(iso("2025-10-11T06:00:00Z"), start: start, end: end) {
-                problems.append("the cab to the airport the day before was excluded")
-            }
             if !TripWindow.covers(iso("2025-10-12T14:00:00Z"), start: start, end: end) {
-                problems.append("a payment during the trip was excluded")
+                problems.append("a payment on the first day was excluded")
             }
-            if !TripWindow.covers(iso("2025-10-15T18:00:00Z"), start: start, end: end) {
-                problems.append("a hotel charge two days after was excluded")
+            if !TripWindow.covers(iso("2025-10-13T18:00:00Z"), start: start, end: end) {
+                problems.append("a payment on the evening of the last day was excluded")
             }
-            if TripWindow.covers(iso("2025-10-09T12:00:00Z"), start: start, end: end) {
-                problems.append("three days before was wrongly claimed")
+            if TripWindow.covers(iso("2025-10-11T06:00:00Z"), start: start, end: end) {
+                problems.append("the day before the trip was claimed")
             }
-            if TripWindow.covers(iso("2025-10-17T12:00:00Z"), start: start, end: end) {
-                problems.append("four days after was wrongly claimed")
+            if TripWindow.covers(iso("2025-10-14T06:00:00Z"), start: start, end: end) {
+                problems.append("the day after the trip ended was claimed")
+            }
+            if TripWindow.covers(iso("2025-10-15T18:00:00Z"), start: start, end: end) {
+                problems.append("two days after the trip ended was claimed")
             }
             return problems
         }
 
         check("a one-day trip still has a usable window") {
             let day = iso("2025-10-12T00:00:00Z")
-            return TripWindow.covers(iso("2025-10-12T23:00:00Z"), start: day, end: day)
+            // 7:30 pm in India, 2 pm UTC: the same day wherever this runs.
+            return TripWindow.covers(iso("2025-10-12T14:00:00Z"), start: day, end: day)
                 ? [] : ["a same-day trip excluded its own evening"]
         }
 

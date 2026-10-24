@@ -53,7 +53,11 @@ struct PaymentDetailView: View {
         .onDisappear { router.clear() }
         // A corrected payee or date may settle — or raise — a receipt warning.
         .onChange(of: payment.merchant) { _, _ in payment.reverifyReceipts() }
-        .onChange(of: payment.paidAt) { _, _ in payment.reverifyReceipts() }
+        .onChange(of: payment.paidAt) { _, date in
+            payment.reverifyReceipts()
+            // A new date outside the trip takes it out of the trip.
+            if let trip = payment.trip, !trip.covers(date) { payment.trip = nil }
+        }
         .sheet(isPresented: $showScanner, onDismiss: { replacing = nil }) {
             DocumentScannerView { images in
                 let old = takeReplacing()
@@ -183,14 +187,21 @@ struct PaymentDetailView: View {
 
             DatePicker("Date", selection: $payment.paidAt, displayedComponents: [.date, .hourAndMinute])
 
+            // Only trips whose dates include the payment can hold it.
             Picker("Trip", selection: Binding(
                 get: { payment.trip },
                 set: { payment.trip = $0 }
             )) {
                 Text("Not in a trip").tag(Trip?.none)
-                ForEach(trips) { trip in
+                ForEach(trips.filter { $0.covers(payment.paidAt) }) { trip in
                     Text(trip.name).tag(Trip?.some(trip))
                 }
+            }
+            if payment.trip == nil && !trips.isEmpty && !trips.contains(where: { $0.covers(payment.paidAt) }) {
+                Text("No trip's dates include \(payment.paidAt.formatted(date: .abbreviated, time: .omitted)), "
+                     + "so this can't be filed under one.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             LabeledContent("Amount to claim") {

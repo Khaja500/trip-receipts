@@ -74,18 +74,13 @@ enum MatchingRules {
     }
 }
 
-/// The dates a trip claims. A day before for the cab to the airport, two days
-/// after for the hotel charge that lands once you are home.
+/// The dates a trip claims: its first day to the end of its last, and not a
+/// day more. A payment outside them is never filed under it — not
+/// automatically, not by hand, and not after either date is edited.
 enum TripWindow {
-    static let daysBefore = 1
-    static let daysAfter = 2
-
     static func range(start: Date, end: Date, calendar: Calendar = .current) -> ClosedRange<Date> {
-        let from = calendar.startOfDay(
-            for: calendar.date(byAdding: .day, value: -daysBefore, to: start) ?? start
-        )
-        let lastDay = calendar.date(byAdding: .day, value: daysAfter, to: end) ?? end
-        let to = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: lastDay) ?? lastDay
+        let from = calendar.startOfDay(for: start)
+        let to = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: end) ?? end
         return from...max(from, to)
     }
 

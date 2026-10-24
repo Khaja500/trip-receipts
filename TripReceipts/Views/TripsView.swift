@@ -237,8 +237,8 @@ struct TripEditorView: View {
                     DatePicker("Start", selection: $startDate, displayedComponents: .date)
                     DatePicker("End", selection: $endDate, in: startDate..., displayedComponents: .date)
                 } footer: {
-                    Text("Payments from the day before the start to two days after the end "
-                         + "are filed here automatically — airport cabs and late hotel charges.")
+                    Text("Work payments made from the start date to the end date are filed here "
+                         + "automatically. Nothing from before or after can be added.")
                 }
 
                 Section("For the claim") {
@@ -294,6 +294,7 @@ struct TripEditorView: View {
             trip.client = client
             trip.costCentre = costCentre
             try? context.save()
+            store.unfileOutsideTrips()
             store.sweepIntoTrip(trip)
         } else {
             let new = Trip(name: name, destination: destination, startDate: startDate,

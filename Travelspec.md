@@ -81,7 +81,7 @@ Refund or reversal SMS: matched to the original payment by reference or amount; 
 
 ### Trips
 - Name, destination, start/end dates, purpose/client/cost centre.
-- Payments within the dates (plus a day before and two after, for airport cabs and late hotel charges) file to the trip automatically when marked work.
+- Payments within the trip's dates — its start date to its end date, no margin either side — file to the trip automatically when marked work. A payment outside them can't be put in the trip at all: the trip menus only offer trips whose dates include the payment, and changing a payment's or a trip's dates takes out anything that no longer fits.
 - Creating a trip can sweep in work expenses already made in those dates.
 - Trip view: total to claim, missing-receipt count, list of expenses, export.
 

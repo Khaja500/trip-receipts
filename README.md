@@ -105,6 +105,12 @@ Personal              → out of the inbox, kept 30 days so it can be undone
 No answer             → stays in the Inbox; a 9 pm reminder if any are waiting
 ```
 
+A trip holds only payments made from its start date to its end date — no
+day before, no day after. The trip menus offer only trips whose dates include
+the payment, and editing a payment's date or a trip's dates takes out whatever
+no longer fits; it shows under *Not in a trip*. Anything filed under the old,
+wider window is taken out the next time the app opens.
+
 ## Proof of payment
 
 The original message is stored exactly as it arrived, with its sender and

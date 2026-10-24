@@ -169,12 +169,13 @@ struct PaymentStore {
 
     // MARK: - Triage
 
-    /// Marks a payment as work and files it to the trip covering its date.
+    /// Marks a payment as work and files it to the trip covering its date. A
+    /// trip asked for by name is used only if its dates include the payment.
     func markWork(_ payment: Payment, trip: Trip? = nil) {
         payment.status = .work
-        if let trip {
+        if let trip, trip.covers(payment.paidAt) {
             payment.trip = trip
-        } else if payment.trip == nil {
+        } else if !(payment.trip?.covers(payment.paidAt) ?? false) {
             payment.trip = tripCovering(payment.paidAt)
         }
         try? context.save()
@@ -286,6 +287,20 @@ struct PaymentStore {
         for payment in unfiled { payment.trip = trip }
         try? context.save()
         return unfiled.count
+    }
+
+    /// Takes every payment out of a trip whose dates don't include it — after
+    /// a trip's or a payment's date is edited, and at launch for anything
+    /// filed under the old, wider window. They show as "Not in a trip".
+    @discardableResult
+    func unfileOutsideTrips() -> Int {
+        let payments = (try? context.fetch(FetchDescriptor<Payment>())) ?? []
+        let outside = payments.filter { payment in
+            payment.trip.map { !$0.covers(payment.paidAt) } ?? false
+        }
+        for payment in outside { payment.trip = nil }
+        if !outside.isEmpty { try? context.save() }
+        return outside.count
     }
 
     /// Payments that would be swept in, shown before the trip is saved.
