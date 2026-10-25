@@ -15,13 +15,16 @@ struct InvoiceParseClient {
     /// The Setup field holding the server address.
     static let serverKey = "parser.server"
 
-    /// What the app knows about the payment. The server takes only the
-    /// currency from these — a hint must never make an invoice match.
+    /// What the app knows about the payment. The rule-based reader takes
+    /// only the currency — a hint must never make an invoice match. Gemini,
+    /// when the server has it, also gets the SMS to judge the two together;
+    /// what it reads is still compared field by field on the phone.
     struct Hints: Encodable {
         var amount: Double
         var currency: String
         var date: String
         var payee: String
+        var message: String?
     }
 
     let server: URL
@@ -190,7 +193,8 @@ extension InvoiceParseClient.Hints {
             currency: payment.currency,
             date: ISO8601DateFormatter.string(from: payment.paidAt, timeZone: .current,
                                               formatOptions: [.withInternetDateTime]),
-            payee: payment.merchant
+            payee: payment.merchant,
+            message: payment.message.isEmpty ? nil : payment.message
         )
     }
 }

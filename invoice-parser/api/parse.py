@@ -11,7 +11,7 @@ import json
 import extractors
 import reading
 
-from . import VERSION
+from . import VERSION, gemini
 
 MAX_FILE_BYTES = 12 * 1024 * 1024
 
@@ -37,7 +37,7 @@ def handle(fields: dict) -> dict:
     return parse_file(upload.data, client_text=text, hints=hints if isinstance(hints, dict) else {})
 
 
-def parse_file(data: bytes, client_text: str | None, hints: dict) -> dict:
+def parse_file(data: bytes, client_text: str | None, hints: dict, use_gemini: bool | None = None) -> dict:
     kind = reading.sniff(data)
     if kind is None:
         raise BadRequest(415, "Only PDF, JPEG, PNG and HEIC receipts can be read.")
@@ -46,4 +46,9 @@ def parse_file(data: bytes, client_text: str | None, hints: dict) -> dict:
     result["text_source"] = source
     result["file_type"] = kind
     result["version"] = VERSION
+    if gemini.enabled() if use_gemini is None else use_gemini:
+        try:
+            result = gemini.merge(result, gemini.check(data, kind, client_text, hints), hints)
+        except gemini.Unavailable as reason:
+            result["ai_error"] = str(reason)
     return result

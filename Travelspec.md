@@ -202,7 +202,7 @@ section and the export. Build plan: `Travelplan.md`, stages 4–6.
 
 - **Reading:** the phone reads the receipt (Vision, PDFKit) and sends the file
   with that text to the parser service (`invoice-parser/`), which returns the
-  fields and a confidence for each. Over 10 s, unreachable, or a total it isn't
+  fields and a confidence for each. Over 30 s, unreachable, or a total it isn't
   sure of → the phone's reading is used and the receipt is *unverified*.
 - **Comparing:** `ReceiptVerifier` applies `VerifierRules`; any mismatch → ⚠
   warning, all match → ✓, close only → ✓ with a note, unread total → ○.

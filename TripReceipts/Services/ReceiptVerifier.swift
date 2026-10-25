@@ -23,10 +23,25 @@ struct ParsedInvoice: Codable, Equatable {
     var periodEnd: String?
     var lineItems: [LineItem]?
     var confidence: Confidence?
+    /// Gemini's verdict on the receipt and the payment's SMS, when the
+    /// server has Gemini on; `aiError` says why it didn't answer.
+    var aiCheck: AICheck?
+    var aiError: String?
 
     struct LineItem: Codable, Equatable {
         var description: String
         var amount: Double
+    }
+
+    struct AICheck: Codable, Equatable {
+        /// match, mismatch or unsure.
+        var verdict: String
+        var explanation: String
+        var model: String?
+        // The payment as it stood when Gemini judged it.
+        var amount: Double?
+        var date: String?
+        var payee: String?
     }
 
     /// 0...1 per field. A reader that doesn't say is trusted.
@@ -110,6 +125,8 @@ enum ReceiptVerifier {
         var currency: String
         var merchant: String
         var paidAt: Date
+        /// The bank SMS, for Gemini to judge the receipt against.
+        var message: String = ""
     }
 
     static func verify(
@@ -137,7 +154,24 @@ enum ReceiptVerifier {
                 result.notes.append(phrase)
             }
         }
+        applyAICheck(invoice.aiCheck, to: &result, payment: payment)
         return result
+    }
+
+    /// Gemini's verdict can only add a warning, never clear one: the fields it
+    /// read are compared above like any other reading. A verdict on the
+    /// payment as it was before an edit no longer counts.
+    private static func applyAICheck(_ ai: ParsedInvoice.AICheck?, to result: inout VerificationResult,
+                                     payment: PaymentSide) {
+        guard let ai, result.source == .online else { return }
+        guard ai.judged(payment) else {
+            result.notes.append("Gemini's check was of the payment before it was edited")
+            return
+        }
+        if ai.verdict == "mismatch" {
+            result.status = .warning
+            result.differences.append("Gemini: " + (ai.explanation.nonEmpty ?? "receipt and payment don't match"))
+        }
     }
 
     /// A mismatch anywhere is a warning — unless the reading came from the
@@ -355,6 +389,17 @@ enum ReceiptVerifier {
             }
         }
         return 2 * Double(shared) / Double(x.count + y.count - 2)
+    }
+}
+
+extension ParsedInvoice.AICheck {
+    /// Whether this verdict was given for the payment as it is now.
+    func judged(_ payment: ReceiptVerifier.PaymentSide) -> Bool {
+        guard let amount, let payee, let date,
+              let judgedAt = ISO8601DateFormatter().date(from: date) else { return false }
+        return abs(amount - payment.amount) < 0.005
+            && payee == payment.merchant
+            && abs(judgedAt.timeIntervalSince(payment.paidAt)) < 60
     }
 }
 

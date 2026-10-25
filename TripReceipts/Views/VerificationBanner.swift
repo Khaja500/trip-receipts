@@ -96,7 +96,13 @@ struct ReceiptCheckDetails: View {
             }
             row("Merchant read", invoice.merchant, verification.merchantResult)
             if let number = invoice.invoiceNumber { row("Invoice no.", number) }
-            row("Read by", verification.source == .online ? "Online parser" : "This iPhone")
+            row("Read by", verification.source == .online
+                ? (invoice.aiCheck != nil ? "Online parser with Gemini" : "Online parser") : "This iPhone")
+            if let ai = invoice.aiCheck {
+                row("Gemini", VerificationText.aiVerdict(ai))
+            } else if let reason = invoice.aiError, verification.source == .online {
+                row("Gemini", "Didn't check: \(reason)")
+            }
             if let reason = verification.fallbackReason, verification.source == .onDevice {
                 row("Why", reason)
             }
@@ -137,6 +143,16 @@ enum VerificationText {
         case .warning: v.overriddenByUser ? "Added anyway" : "Doesn't match"
         case .unverified: "Unverified"
         }
+    }
+
+    /// "Matches — the ₹486 Uber ride on 12 Oct is the same payment."
+    static func aiVerdict(_ ai: ParsedInvoice.AICheck) -> String {
+        let verdict = switch ai.verdict {
+        case "match": "Matches"
+        case "mismatch": "Doesn't match"
+        default: "Unsure"
+        }
+        return ai.explanation.isEmpty ? verdict : "\(verdict) — \(ai.explanation)"
     }
 
     /// What differs, what was let through, or why it couldn't be checked.
