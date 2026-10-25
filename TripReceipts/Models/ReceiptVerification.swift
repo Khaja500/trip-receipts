@@ -73,7 +73,7 @@ final class ReceiptVerification {
 extension ReceiptVerifier.PaymentSide {
     init(_ payment: Payment) {
         self.init(amount: payment.amount, currency: payment.currency,
-                  merchant: payment.merchant, paidAt: payment.paidAt, message: payment.rawMessage)
+                  merchant: payment.merchant, paidAt: payment.paidAt)
     }
 }
 

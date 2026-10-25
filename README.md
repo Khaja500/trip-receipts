@@ -127,8 +127,7 @@ time, and payee. A mismatch is a **warning, never a block**.
 
 ```
 attach → the phone reads it (Vision / PDFKit)
-       → file + that text + the payment's SMS go to the parser server (30 s limit)
-       → the server reads it by its rules, then asks Gemini (when it has a key)
+       → file + that text go to the parser server (10 s limit)
        → ReceiptVerifier compares the fields with the payment
             ✓ matched     all agree, or differ in an accepted way (a tip,
                           a bill printed before midnight, a hotel stay)
@@ -157,15 +156,6 @@ Every tolerance is in `Services/VerifierRules.swift`:
 
 An invoice in another currency is not compared (unverified), and a reading
 from the phone alone is never a warning.
-
-**Gemini.** With a Gemini API key on the server, Google's Gemini reads the
-receipt as well and is given the bank SMS to judge the two together. Its
-readings replace the rules' wherever it found a field, and are compared above
-like any other. Its verdict can only add a warning — *"Gemini: the receipt is
-for a ride on another account"* — never clear one the fields raise, and a
-verdict on a payment you have since edited no longer counts. The banner's
-details show what Gemini said, or why it didn't answer; without it the rules'
-reading stands alone.
 
 ### The parser server
 
@@ -283,11 +273,9 @@ discarded, never written down. Personal payments are deleted 30 days after you
 mark them. With website sync off and no parser server set, data leaves the
 phone only when you export and share a report.
 
-With a parser server set, each receipt you attach — the text the phone read
-off it, and the payment's SMS, amount, date and payee — is sent to that
-server, nothing else. The server processes it in memory and logs only method,
-path, status, size and time. With a Gemini key on the server, the same is
-passed on to Google's Gemini API, under Google's terms for that key.
+With a parser server set, each receipt you attach — and the text the phone
+read off it — is sent to that server, nothing else. The server processes it in
+memory and logs only method, path, status, size and time.
 
 With website sync on, the payments and trips — including the original SMS
 text — are also copied to the private repo you chose. With a shared repo set,
@@ -314,7 +302,7 @@ Carried over from the spec, and still true:
 - Fine-grained tokens expire (you pick when). The phone's Setup and the
   website both say so when GitHub refuses one.
 - The receipt check needs the parser to be reachable; offline, or if Cloud
-  Run is ever slower than 30 s, a receipt is ○ unverified until *Check again
+  Run is ever slower than 10 s, a receipt is ○ unverified until *Check again
   online*. The parser is
   rule-based and tuned on Indian invoices; a misread invoice raises a warning
   you can add past, and should become a fixture.

@@ -43,7 +43,6 @@ enum VerifierRules {
     /// A field the parser is less sure of than this counts as not read.
     static let minimumConfidence = 0.6
 
-    /// Longer than this and the phone's own reading is used instead. Room
-    /// for Gemini, which can take several seconds over a photo.
-    static let parserTimeout: TimeInterval = 30
+    /// Longer than this and the phone's own reading is used instead.
+    static let parserTimeout: TimeInterval = 10
 }

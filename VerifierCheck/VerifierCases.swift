@@ -240,44 +240,6 @@ enum VerifierCases {
             payment: uber,
             invoice: invoice(486, from: nil, dated: nil),
             expect: .init(status: .unverified, amount: .match, time: .unread, merchant: .unread)
-        ),
-
-        // MARK: Gemini's verdict
-
-        VerifierCase(
-            label: "Gemini spotting a difference the fields don't show is a warning",
-            payment: uber,
-            invoice: gemini("mismatch", "The receipt is for a ride on another account.",
-                            invoice(486, from: "Uber", dated: "2025-10-12", time: "09:38")),
-            expect: .init(status: .warning, amount: .match, time: .match, merchant: .match,
-                          summary: "Gemini: The receipt is for a ride on another account.")
-        ),
-        VerifierCase(
-            label: "Gemini agreeing doesn't clear a difference in the fields",
-            payment: uber,
-            invoice: gemini("match", "Same ride.", invoice(620, from: "Uber", dated: "2025-10-12")),
-            expect: .init(status: .warning, amount: .mismatch, summary: "Invoice total ₹620 vs payment ₹486")
-        ),
-        VerifierCase(
-            label: "Gemini unsure leaves a match as it is",
-            payment: uber,
-            invoice: gemini("unsure", "The photo is blurred.", invoice(486, from: "Uber", dated: "2025-10-12")),
-            expect: .init(status: .matched)
-        ),
-        VerifierCase(
-            label: "a verdict on the payment before it was edited no longer counts",
-            payment: paid(486, to: "UBER INDIA", at: "2025-10-12 10:30"),
-            invoice: gemini("mismatch", "Paid 50 minutes after the ride.",
-                            invoice(486, from: "Uber", dated: "2025-10-12")),
-            expect: .init(status: .matched, summary: "before it was edited")
         )
     ]
-
-    /// The invoice as the server returns it with Gemini on, judged against `uber`.
-    static func gemini(_ verdict: String, _ explanation: String, _ invoice: ParsedInvoice) -> ParsedInvoice {
-        var invoice = invoice
-        invoice.aiCheck = .init(verdict: verdict, explanation: explanation, model: "gemini",
-                                amount: uber.amount, date: "2025-10-12T09:41:00+05:30", payee: uber.merchant)
-        return invoice
-    }
 }
