@@ -11,6 +11,8 @@ SwiftData, no server and no third-party packages.
 
 **Website:** <https://khaja500.github.io/trip-receipts/> shows the same
 payments on any screen, live, once sync is turned on — see [Website](#website).
+The private repo is :Khaja500/trip-receipts-shared
+The Read only token is : AQ.Ab8RN6K1CTC8sMOUVN_U3SaiddYwUscqUqAsr-bdWmgX9422Qg
 
 ## Opening it
 
