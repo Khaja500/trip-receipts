@@ -1,3 +1,4 @@
+import BackgroundTasks
 import UIKit
 import UserNotifications
 import SwiftData
@@ -15,6 +16,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         NotificationManager.registerCategories()
         GitHubSync.shared.startObserving()
+        // Wakes the app now and then to fetch payments added on the website.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: GitHubSync.refreshTaskID, using: nil) { task in
+            guard let task = task as? BGAppRefreshTask else { return }
+            GitHubSync.handleRefresh(task)
+        }
         return true
     }
 

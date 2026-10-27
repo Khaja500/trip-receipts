@@ -265,7 +265,7 @@ struct SetupView: View {
                 Text("Syncing…").foregroundStyle(.secondary)
             }
             .font(.callout)
-        } else if let error = sync.lastError {
+        } else if let error = sync.lastError ?? sync.webInboxError {
             Label(error, systemImage: "exclamationmark.triangle.fill")
                 .font(.callout)
                 .foregroundStyle(.orange)

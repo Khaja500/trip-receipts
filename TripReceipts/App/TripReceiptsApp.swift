@@ -25,7 +25,9 @@ struct TripReceiptsApp: App {
         .onChange(of: scenePhase) { _, phase in
             // Edits on the payment screen autosave on their own schedule;
             // leaving the app is the moment to make sure they went up.
+            // Coming back is the moment to fetch anything added on the website.
             if phase == .background { GitHubSync.shared.syncBeforeSuspending() }
+            if phase == .active { GitHubSync.shared.scheduleSync() }
         }
     }
 }

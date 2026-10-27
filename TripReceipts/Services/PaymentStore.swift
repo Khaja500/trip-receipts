@@ -83,6 +83,7 @@ struct PaymentStore {
     }
 
     /// A payment typed in by hand — cash, or anything that never sent an SMS.
+    /// `uid` keeps the id a payment added on the website already has.
     @discardableResult
     func addManual(
         amount: Double,
@@ -92,7 +93,8 @@ struct PaymentStore {
         paidAt: Date,
         instrument: String = "Cash",
         notes: String = "",
-        status: PaymentStatus = .work
+        status: PaymentStatus = .work,
+        uid: String? = nil
     ) -> Payment {
         let payment = Payment(
             amount: amount,
@@ -104,6 +106,7 @@ struct PaymentStore {
             isManual: true
         )
         payment.notes = notes
+        if let uid { payment.uid = uid }
         context.insert(payment)
         if status == .work { markWork(payment) } else { payment.status = status }
         try? context.save()

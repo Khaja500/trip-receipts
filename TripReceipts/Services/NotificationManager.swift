@@ -124,6 +124,24 @@ enum NotificationManager {
         await add(content, identifier: "refund-\(UUID().uuidString)", trigger: nil)
     }
 
+    /// A payment added on the website has landed. One still waiting gets the
+    /// usual question; one already marked work just says it arrived.
+    static func arrivedFromWebsite(_ payment: Payment, store: PaymentStore) async {
+        guard payment.status == .work else {
+            await askAbout(payment, hint: "Added on the website")
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "Added from the website"
+        let receipts = payment.receipts.count
+        content.body = "\(payment.formattedAmount) · \(payment.merchant)"
+            + (receipts == 0 ? "" : receipts == 1 ? " · 1 receipt" : " · \(receipts) receipts")
+            + (payment.trip.map { ". Filed under \($0.name)." } ?? ".")
+        content.userInfo = [UserInfoKey.paymentID: payment.uid]
+        content.threadIdentifier = "payments"
+        await add(content, identifier: "web-\(payment.uid)", trigger: nil)
+    }
+
     // MARK: - 9 pm reminder
 
     /// Rescheduled whenever the inbox changes, and cancelled when it empties.

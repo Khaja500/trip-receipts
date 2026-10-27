@@ -10,5 +10,15 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- Background refresh fetches payments added on the website while the
+	     app is closed. iOS decides when; opening the app always fetches. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.Khaja-Aflal.tripreceipts.web-inbox</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

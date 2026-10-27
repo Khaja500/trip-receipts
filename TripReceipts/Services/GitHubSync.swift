@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import Observation
 import SwiftData
@@ -7,6 +8,9 @@ import UIKit
 /// website reads — with no token when the repo is public. Off until a repo and
 /// token are saved in Setup; the token is only for writing. With a shared repo
 /// set as well, a work-only copy goes there too, for someone else to read.
+///
+/// Each sync first files any payments added on the website (`WebInbox`), so
+/// they go back up in the same snapshot.
 ///
 /// The whole snapshot is rewritten after each change rather than patched: the
 /// phone is the only writer, so the latest file is always the truth and a
@@ -43,6 +47,11 @@ final class GitHubSync {
     private(set) var lastError: String?
     /// The shared copy fails on its own — usually a token that can't see that repo.
     private(set) var shareError: String?
+    /// Fetching website additions fails on its own too; the upload still runs.
+    private(set) var webInboxError: String?
+
+    /// Must match BGTaskSchedulerPermittedIdentifiers in TripReceipts-Info.plist.
+    static let refreshTaskID = "com.Khaja-Aflal.tripreceipts.web-inbox"
 
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
@@ -120,6 +129,7 @@ final class GitHubSync {
         defaults.set(new.shareRepo, forKey: Key.shareRepo)
         lastError = nil
         shareError = nil
+        webInboxError = nil
     }
 
     func forgetToken() {
@@ -175,9 +185,51 @@ final class GitHubSync {
             task = .invalid
         }
         task = UIApplication.shared.beginBackgroundTask(withName: "GitHubSync") { finish() }
+        scheduleRefresh()
         Task {
             await syncNow()
             finish()
+        }
+    }
+
+    // MARK: - Background refresh
+
+    /// Asks iOS to wake the app in about a quarter of an hour. iOS picks the
+    /// actual time, often later, and less often for an app rarely opened.
+    func scheduleRefresh() {
+        guard isActive else { return }
+        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
+        request.earliestBeginDate = .now.addingTimeInterval(15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    static func handleRefresh(_ task: BGAppRefreshTask) {
+        let work = Task { @MainActor in
+            GitHubSync.shared.scheduleRefresh()
+            await GitHubSync.shared.syncNow()
+            task.setTaskCompleted(success: !Task.isCancelled)
+        }
+        task.expirationHandler = { work.cancel() }
+    }
+
+    // MARK: - Website additions
+
+    /// Files payments added on the website before the snapshot is taken, so
+    /// they go straight back up with everything else.
+    private func pullFromWebsite(token: String, target: Settings) async {
+        let inbox = WebInbox(token: token, owner: target.owner, repo: target.repo)
+        let store = PaymentStore(context: ModelContext(ModelContainer.shared))
+        do {
+            let created = try await inbox.pull(into: store)
+            for payment in created {
+                await NotificationManager.arrivedFromWebsite(payment, store: store)
+            }
+            if !created.isEmpty {
+                await NotificationManager.updatePendingReminder(count: store.pendingCount())
+            }
+            webInboxError = nil
+        } catch {
+            webInboxError = "Couldn't fetch payments added on the website: \(error.localizedDescription)"
         }
     }
 
@@ -188,6 +240,8 @@ final class GitHubSync {
     private func push(force: Bool) async {
         guard isActive, let token = Self.keychain.read() else { return }
         let target = settings
+
+        await pullFromWebsite(token: token, target: target)
 
         let snapshot: SyncSnapshot
         do {
