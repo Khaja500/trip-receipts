@@ -546,7 +546,7 @@ function renderTabs() {
   }
   const inbox = $('tab-inbox');
   const count = state.view.pending.length;
-  inbox.replaceChildren('Inbox', count ? h('span', { class: 'count', 'aria-label': `${count} waiting` }, count) : null);
+  inbox.replaceChildren('Inbox', ...(count ? [h('span', { class: 'count', 'aria-label': `${count} waiting` }, count)] : []));
   $('panel').setAttribute('aria-labelledby', `tab-${state.tab}`);
 }
 
