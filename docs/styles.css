@@ -387,3 +387,17 @@ dialog::backdrop { background: rgba(10, 10, 9, 0.45); backdrop-filter: blur(2px)
   dialog { width: 100vw; max-width: 100vw; max-height: 92vh; margin: auto 0 0; border-radius: 18px 18px 0 0; }
   .d-amount .big { font-size: 34px; }
 }
+
+/* ---------- Access details */
+
+.access { margin-top: 24px; padding: 20px 24px; display: grid; gap: 10px; }
+.access h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.access p { margin: 0; color: var(--ink-2); }
+.access dl { margin: 0; display: grid; gap: 6px; }
+.access dt { font-size: 12px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-top: 6px; }
+.access dd { margin: 0; min-width: 0; }
+.access code {
+  display: block; font: 13px/1.5 var(--mono); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+  overflow-wrap: anywhere; user-select: all; color: var(--ink);
+}
