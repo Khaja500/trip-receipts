@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light dark">
   <title>Trip Receipts</title>
   <meta name="description" content="Work-travel payments caught on the iPhone, live from your private GitHub repo.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121211'/%3E%3Cpath d='M10 8h12v17l-3-2-3 2-3-2-3 2z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M13 13h6M13 17h4' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=2">
-  <script src="app.js?v=4" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3">
+  <script src="app.js?v=5" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +24,7 @@
         <span class="pill" id="pill" hidden></span>
         <button class="icon-btn" id="refresh" type="button" title="Check for new payments" aria-label="Check for new payments" hidden></button>
         <button class="icon-btn" id="settings" type="button" title="Connection" aria-label="Connection" hidden></button>
+        <button class="btn btn-primary btn-sm add-btn" id="add-btn" type="button" hidden><span>Add payment</span></button>
       </div>
     </div>
   </header>
@@ -91,10 +92,11 @@
   </main>
 
   <footer class="wrap footer">
-    <p>Read-only. Answer payments, add receipts and edit trips on the iPhone; this page follows within half a minute.
-      Receipt images stay on the phone. <a href="https://github.com/Khaja500/trip-receipts" target="_blank" rel="noopener">Source</a></p>
+    <p>Answer payments and edit trips on the iPhone; this page follows within half a minute. A payment added here
+      goes to the phone through the repo and shows up for good once the phone has synced it. <a href="https://github.com/Khaja500/trip-receipts" target="_blank" rel="noopener">Source</a></p>
   </footer>
 
   <dialog id="detail" aria-labelledby="detail-title"></dialog>
+  <dialog id="add" aria-labelledby="add-title"></dialog>
 </body>
 </html>

@@ -2,9 +2,10 @@
 
 /* Trip Receipts, on the web.
    Reads transactions.json, which the iPhone app rewrites in a GitHub repo
-   after every change, and shows it. Read-only: the phone is the only writer.
-   With no token it reads the public work-only repo; a token, when given, is
-   sent to api.github.com and nowhere else. */
+   after every change, and shows it. The phone is the only writer of that
+   file: a payment added here goes into web-inbox/ in the same repo, and the
+   phone files it and syncs it back. Reading needs no token; adding needs one
+   with write access, which is sent to api.github.com and nowhere else. */
 
 const API = 'https://api.github.com';
 const DATA_PATH = 'transactions.json';
@@ -16,6 +17,16 @@ const PUBLIC_POLL_MS = 90_000;
 // Read with no token, first readable wins: every payment, then the work-only copy.
 const PUBLIC_REPOS = ['Khaja500/trip-receipts-data', 'Khaja500/trip-receipts-shared'];
 const NEW_FOR_MS = 15 * 60_000;
+// Payments added here go to the repo with every payment, where the phone looks.
+const WRITE_REPO = PUBLIC_REPOS[0];
+const WEB_INBOX = 'web-inbox';
+const WRITE_TOKEN_KEY = 'tripReceipts.writeToken';
+const SENT_KEY = 'tripReceipts.sent';
+const SAMPLE_KEY = 'tripReceipts.sampleAdded';
+// Photos are scaled down before upload; the phone reads 2000 px receipts fine.
+const MAX_IMAGE_EDGE = 2000;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'THB', 'JPY'];
 const REPO_PATTERN = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
 // Mirrors ExpenseCategory: title, and whether it suggests travel on its own.
@@ -67,6 +78,10 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
   suitcase: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v2M3 12.5h18"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
+  trash: '<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
 };
 
 const state = {
@@ -86,6 +101,10 @@ const state = {
   allStatus: 'all',
   search: '',
   openUid: null,
+  sent: [],                // added here, not yet back from the phone: { entry, previews }
+  sampleAdded: [],         // sample payments added in this browser
+  writeToken: '',
+  pickedFiles: [],         // receipts chosen in the add form: { file, url }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -204,9 +223,9 @@ function tripWindow(trip) {
 }
 
 /** Shortest matching trip wins, as on the phone. */
-function tripCovering(date) {
+function tripCovering(date, trips = state.view.trips) {
   const span = (t) => new Date(t.endDate) - new Date(t.startDate);
-  return state.view.trips
+  return trips
     .filter((t) => { const [from, to] = tripWindow(t); return date >= from && date <= to; })
     .sort((a, b) => span(a) - span(b))[0];
 }
@@ -266,12 +285,52 @@ function applySnapshot(text) {
 
   const first = !state.snapshot;
   const now = Date.now();
+  // A payment sent from here is back from the phone: it shows as new, once.
+  const arrived = new Set(data.payments.map((p) => p.uid));
+  const returned = new Set(state.sent.filter((s) => arrived.has(s.entry.uid)).map((s) => s.entry.uid));
   for (const p of data.payments) {
-    if (!state.firstSeen.has(p.uid)) state.firstSeen.set(p.uid, first ? 0 : now);
+    if (!state.firstSeen.has(p.uid)) state.firstSeen.set(p.uid, first && !returned.has(p.uid) ? 0 : now);
+  }
+  if (returned.size) {
+    state.sent = state.sent.filter((s) => !returned.has(s.entry.uid));
+    saveSent();
   }
   state.raw = text;
   state.snapshot = data;
-  state.view = derive(data);
+  state.view = derive(withLocal(data));
+  render();
+}
+
+/** The synced data plus what was added in this browser and isn't in it yet. */
+function withLocal(data) {
+  const added = state.mode === 'demo' ? state.sampleAdded : state.sent;
+  const known = new Set(data.payments.map((p) => p.uid));
+  const extra = added.filter((s) => !known.has(s.entry.uid))
+    .map((s) => localRecord(s, data.trips, state.mode === 'demo' ? 'sample' : 'sending'));
+  return extra.length ? { ...data, payments: [...data.payments, ...extra] } : data;
+}
+
+/** An added payment in the shape the phone syncs, as the phone would file it. */
+function localRecord({ entry, previews = [] }, trips, origin) {
+  const trip = entry.status === 'work' ? tripCovering(new Date(entry.paidAt), trips) : null;
+  return {
+    uid: entry.uid, status: entry.status, amount: entry.amount, currency: entry.currency,
+    merchant: entry.merchant, instrument: entry.instrument || 'Added on the website',
+    reference: null, bank: null, paidAt: entry.paidAt, category: entry.category,
+    claimableAmount: entry.amount, refundedAmount: 0, netClaimable: entry.amount,
+    notes: entry.notes, isManual: true, parseConfidence: 1,
+    reviewedAt: entry.status === 'pending' ? null : entry.addedAt, tripID: trip?.id ?? null,
+    receipts: entry.receipts.map((r, i) => ({
+      filename: r.filename, isPDF: r.isPDF, addedAt: entry.addedAt, ocrTotal: null, preview: previews[i] || null,
+    })),
+    rawMessage: '', sender: '', receivedAt: entry.addedAt, messageHash: '', additionalMessages: [],
+    origin,
+  };
+}
+
+function rederive() {
+  if (!state.snapshot) return;
+  state.view = derive(withLocal(state.snapshot));
   render();
 }
 
@@ -499,6 +558,7 @@ function renderChrome() {
   } else if (live) {
     text = 'Connecting…';
   }
+  $('add-btn').hidden = !state.snapshot;
   pill.className = `pill ${cls}`;
   pill.title = title;
   pill.replaceChildren(h('span', { class: 'dot', 'aria-hidden': 'true' }), h('span', { class: 'pill-text' }, text));
@@ -509,6 +569,8 @@ function renderChrome() {
     banner.classList.add('demo');
     banner.replaceChildren(icon('info'), h('span', null,
       'Invented sample data, in exactly the shape the phone syncs. ',
+      h('button', { class: 'link-btn', type: 'button', onclick: openAdd }, 'Add a sample payment'),
+      ' · ',
       h('button', { class: 'link-btn', type: 'button', onclick: () => showConnect() }, 'Connect your repo')));
     banner.hidden = false;
   } else if (live && state.error && state.snapshot) {
@@ -630,7 +692,9 @@ function paymentRow(p, kind) {
   },
   categoryBadge(p.category),
   h('span', { class: 'row-main' },
-    h('span', { class: 'row-title' }, h('span', null, p.merchant || 'Unknown payee'), isNew(p) && tag('New', 'new')),
+    h('span', { class: 'row-title' }, h('span', null, p.merchant || 'Unknown payee'), isNew(p) && tag('New', 'new'),
+      p.origin === 'sending' && tag('Waiting for phone', 'waiting', 'phone'),
+      p.origin === 'sample' && tag('Added here', 'work')),
     h('span', { class: 'row-meta' }, meta.filter(Boolean).join(' · '))),
   h('span', { class: 'row-side' }, side));
 }
@@ -830,7 +894,7 @@ function renderDetail() {
     if (p.claimableAmount < p.amount - 0.005) claim.push(`part of the bill (${money(p.claimableAmount, p.currency)})`);
     if (p.refundedAmount > 0) claim.push(`after a ${money(p.refundedAmount, p.currency)} refund`);
   } else if (p.status === 'pending') {
-    claim.push('Waiting for an answer on the phone');
+    claim.push(p.origin === 'sending' ? 'The phone will ask whether this was work' : 'Waiting for an answer on the phone');
   } else {
     claim.push('Marked personal — not claimed');
   }
@@ -847,7 +911,16 @@ function renderDetail() {
     ['Parsing', p.parseConfidence < 0.9 && !p.isManual && 'Partly understood — check the payee on the phone'],
   ].filter(([, value]) => value);
 
+  const origin = {
+    sending: 'Added on this website. The phone files it the next time Trip Receipts syncs — open the app to fetch it now.',
+    sample: 'A sample payment, kept only in this browser.',
+  }[p.origin];
+
   dialog.replaceChildren(
+    origin && h('div', { class: 'd-origin' }, icon(p.origin === 'sending' ? 'phone' : 'info'), h('span', null, origin),
+      p.origin === 'sample' && h('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => removeSample(p.uid),
+      }, icon('trash'), 'Remove')),
     h('div', { class: 'd-head' },
       categoryBadge(p.category),
       h('div', null,
@@ -870,7 +943,9 @@ function renderDetail() {
     h('section', { class: 'd-section' },
       h('h3', null, 'Proof of payment'),
       p.isManual || !p.rawMessage
-        ? h('p', { class: 'note' }, 'Entered by hand — there is no bank message for this one.')
+        ? h('p', { class: 'note' }, p.origin
+          ? 'Added on the website — there is no bank message for this one.'
+          : 'Entered by hand — there is no bank message for this one.')
         : [
           proofBlock({ text: p.rawMessage, sender: p.sender, receivedAt: p.receivedAt, fingerprint: p.messageHash }, 'Original message'),
           ...(p.additionalMessages || []).map((m) => proofBlock(m, 'Also received')),
@@ -887,9 +962,10 @@ function receiptLine(r, p) {
       ? tag(`Total ${money(r.ocrTotal, p.currency)} matches`, 'ok', 'check')
       : tag(`Total read ${money(r.ocrTotal, p.currency)}`, 'missing', 'alert');
   }
+  const where = { sending: 'uploaded, waiting for the phone', sample: 'in this browser only' }[p.origin] || 'kept on the phone';
   return h('div', { class: 'receipt' },
-    icon(r.isPDF ? 'visaForex' : 'clip'),
-    h('div', { class: 'grow' }, r.filename, h('small', null, `Added ${dayText(new Date(r.addedAt))} · kept on the phone`)),
+    r.preview ? h('img', { class: 'thumb', src: r.preview, alt: '' }) : icon(r.isPDF ? 'visaForex' : 'clip'),
+    h('div', { class: 'grow' }, r.filename, h('small', null, `Added ${dayText(new Date(r.addedAt))} · ${where}`)),
     check);
 }
 
@@ -923,6 +999,323 @@ async function verifyFingerprint({ sender, receivedAt, text, fingerprint }) {
 }
 
 const shortHash = (hash) => (hash && hash.length >= 16 ? `${hash.slice(0, 8)}…${hash.slice(-8)}` : hash || '—');
+
+// ---------------------------------------------------------------- Adding payments
+
+function loadLocal() {
+  const read = (store, key) => { try { return JSON.parse(store.getItem(key) || 'null'); } catch { return null; } };
+  state.writeToken = read(localStorage, WRITE_TOKEN_KEY) || read(sessionStorage, WRITE_TOKEN_KEY) || '';
+  state.sampleAdded = read(localStorage, SAMPLE_KEY) || [];
+  // Sent entries are kept a week; by then the phone has them or never will.
+  const week = Date.now() - 7 * 86_400_000;
+  state.sent = (read(localStorage, SENT_KEY) || []).filter((s) => new Date(s.entry.addedAt) > week);
+}
+
+function saveSent() {
+  // Previews are object URLs, gone after a reload anyway.
+  try { localStorage.setItem(SENT_KEY, JSON.stringify(state.sent.map(({ entry }) => ({ entry })))); } catch { /* memory only */ }
+}
+
+function saveSamples() {
+  try {
+    localStorage.setItem(SAMPLE_KEY, JSON.stringify(state.sampleAdded));
+  } catch {
+    // Out of room: keep the payments, drop their pictures.
+    try { localStorage.setItem(SAMPLE_KEY, JSON.stringify(state.sampleAdded.map(({ entry }) => ({ entry, previews: [] })))); } catch { /* memory only */ }
+  }
+}
+
+function saveWriteToken(token, remember) {
+  forgetWriteToken();
+  state.writeToken = token;
+  try { (remember ? localStorage : sessionStorage).setItem(WRITE_TOKEN_KEY, JSON.stringify(token)); } catch { /* memory only */ }
+}
+
+function forgetWriteToken() {
+  state.writeToken = '';
+  try { localStorage.removeItem(WRITE_TOKEN_KEY); } catch { /* ignore */ }
+  try { sessionStorage.removeItem(WRITE_TOKEN_KEY); } catch { /* ignore */ }
+}
+
+function removeSample(uid) {
+  state.sampleAdded = state.sampleAdded.filter((s) => s.entry.uid !== uid);
+  saveSamples();
+  $('detail').close();
+  rederive();
+}
+
+function clearPicked() {
+  for (const { url } of state.pickedFiles) URL.revokeObjectURL(url);
+  state.pickedFiles = [];
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+const localInputValue = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** Whole seconds, as the phone writes and reads its dates. */
+const isoSeconds = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+function openAdd() {
+  const live = state.mode === 'live';
+  const dialog = $('add');
+  clearPicked();
+
+  const field = (label, control, hint) => h('label', { class: 'field' }, h('span', null, label), control, hint && h('small', null, hint));
+  const choice = (value, label, sub, checked) => h('label', { class: 'choice' },
+    h('input', { type: 'radio', name: 'status', value, checked }),
+    h('span', null, h('b', null, label), h('small', null, sub)));
+
+  const thumbs = h('div', { class: 'thumbs' });
+  const fileInput = h('input', {
+    id: 'a-files', type: 'file', accept: 'image/*,application/pdf', multiple: true, class: 'visually-hidden',
+    onchange: (e) => {
+      for (const file of e.target.files) {
+        state.pickedFiles.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : '' });
+      }
+      e.target.value = '';
+      drawThumbs();
+    },
+  });
+  function drawThumbs() {
+    thumbs.replaceChildren(...state.pickedFiles.map((picked, i) => h('div', { class: 'thumb-card' },
+      picked.url ? h('img', { src: picked.url, alt: '' }) : h('span', { class: 'thumb-pdf' }, icon('visaForex'), 'PDF'),
+      h('span', { class: 'thumb-name' }, picked.file.name),
+      h('button', {
+        type: 'button', class: 'icon-btn', 'aria-label': `Remove ${picked.file.name}`,
+        onclick: () => { URL.revokeObjectURL(picked.url); state.pickedFiles.splice(i, 1); drawThumbs(); },
+      }, icon('close')))));
+  }
+
+  const tokenBlock = live && (state.writeToken
+    ? h('p', { class: 'fine' }, 'Using the GitHub token saved on this browser. ',
+      h('button', { type: 'button', class: 'link-btn', onclick: () => { forgetWriteToken(); openAdd(); } }, 'Forget it'))
+    : h('div', { class: 'token-box' },
+      field('GitHub token', h('input', {
+        id: 'a-token', type: 'password', autocomplete: 'off', spellcheck: 'false', required: true,
+        placeholder: 'github_pat_…',
+      }), h('span', null, 'Needs ', h('em', null, 'Contents: Read and write'), ` on ${WRITE_REPO}. `,
+        h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener' }, 'Create one ↗'))),
+      h('label', { class: 'check' }, h('input', { id: 'a-remember', type: 'checkbox', checked: true }),
+        h('span', null, 'Remember on this browser'))));
+
+  const form = h('form', { id: 'add-form', class: 'add-form', novalidate: true, onsubmit: onAdd },
+    h('div', { class: 'd-head' },
+      h('div', null,
+        h('h2', { id: 'add-title' }, live ? 'Add a payment' : 'Add a sample payment'),
+        h('p', { class: 'd-note' }, live
+          ? 'It goes to your iPhone through the repo. The phone files it, reads the receipts, and syncs it back here.'
+          : 'Try the website with your own payment. It stays in this browser and is never uploaded.')),
+      h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => $('add').close() }, icon('close'))),
+    h('div', { class: 'add-grid' },
+      h('div', { class: 'amount-row' },
+        field('Amount', h('input', { id: 'a-amount', type: 'number', inputmode: 'decimal', min: '0.01', step: '0.01', required: true, placeholder: '0.00' })),
+        field('Currency', h('select', { id: 'a-currency', class: 'input' }, CURRENCIES.map((c) => h('option', { value: c }, c))))),
+      field('Paid to', h('input', { id: 'a-merchant', required: true, maxlength: '80', placeholder: 'Uber, IndiGo, Taj Hotels…', autocomplete: 'off' })),
+      h('div', { class: 'two' },
+        field('Category', h('select', { id: 'a-category', class: 'input' },
+          Object.entries(CATEGORIES).map(([key, [title]]) => h('option', { value: key, selected: key === 'cab' }, title)))),
+        field('Paid on', h('input', { id: 'a-paid', type: 'datetime-local', required: true, value: localInputValue(new Date()) }))),
+      field('Paid by', h('input', { id: 'a-instrument', maxlength: '60', placeholder: 'UPI · HDFC, Card ••4455, Cash', autocomplete: 'off' })),
+      field('Notes', h('textarea', { id: 'a-notes', rows: '2', maxlength: '500', placeholder: 'Client, purpose, anything finance will ask' })),
+      h('fieldset', { class: 'choices' },
+        h('legend', null, 'Is it work travel?'),
+        choice('work', 'Work travel', 'Filed to the trip covering its date', true),
+        choice('pending', 'Not sure yet', live ? 'The phone asks you' : 'Waits in the Inbox'),
+        choice('personal', 'Personal', 'Not claimed')),
+      h('div', { class: 'field' },
+        h('span', null, 'Receipts'),
+        h('label', { class: 'drop', for: 'a-files' }, icon('upload'),
+          h('span', null, h('b', null, 'Add photos or PDFs'), h('small', null, 'On a phone you can take a photo'))),
+        fileInput,
+        thumbs,
+        live && h('small', { class: 'warn-text' }, `${WRITE_REPO} is public: receipts are visible there until the phone picks them up, and stay in the repo's history.`)),
+      tokenBlock,
+      h('p', { class: 'form-error', id: 'add-error', role: 'alert', hidden: true }),
+    ),
+    h('div', { class: 'add-actions' },
+      h('button', { type: 'button', class: 'btn btn-ghost', onclick: () => $('add').close() }, 'Cancel'),
+      h('button', { type: 'submit', class: 'btn btn-primary', id: 'add-submit' }, live ? 'Send to phone' : 'Add sample payment')));
+
+  dialog.replaceChildren(form);
+  if (!dialog.open) dialog.showModal();
+  $('a-amount').focus();
+}
+
+function addError(message) {
+  const el = $('add-error');
+  el.hidden = !message;
+  el.textContent = message || '';
+  if (message) el.scrollIntoView({ block: 'nearest' });
+}
+
+async function onAdd(event) {
+  event.preventDefault();
+  const amount = Math.round(parseFloat($('a-amount').value) * 100) / 100;
+  const merchant = $('a-merchant').value.trim();
+  const paid = new Date($('a-paid').value);
+  if (!(amount > 0)) return addError('Enter the amount paid.');
+  if (!merchant) return addError('Enter who was paid.');
+  if (Number.isNaN(paid.getTime())) return addError('Enter when it was paid.');
+  if (paid > new Date(Date.now() + 86_400_000)) return addError('That date is in the future.');
+  const tooBig = state.pickedFiles.find(({ file }) => !file.type.startsWith('image/') && file.size > MAX_FILE_BYTES);
+  if (tooBig) return addError(`${tooBig.file.name} is over 10 MB. Attach a smaller copy.`);
+
+  const live = state.mode === 'live';
+  let token = state.writeToken;
+  if (live && !token) {
+    token = $('a-token').value.trim();
+    if (!token) return addError('Paste a GitHub token that can write to the repo.');
+  }
+
+  const button = $('add-submit');
+  button.disabled = true;
+  addError('');
+  const entry = {
+    schema: 1,
+    uid: crypto.randomUUID().toUpperCase(),
+    amount,
+    currency: $('a-currency').value,
+    merchant,
+    category: $('a-category').value,
+    paidAt: isoSeconds(paid),
+    instrument: $('a-instrument').value.trim(),
+    notes: $('a-notes').value.trim(),
+    status: new FormData($('add-form')).get('status') || 'work',
+    addedAt: isoSeconds(new Date()),
+    receipts: [],
+  };
+
+  try {
+    button.textContent = 'Preparing receipts…';
+    const files = [];
+    for (const [i, { file }] of state.pickedFiles.entries()) files.push(await prepareReceipt(file, i, live));
+    entry.receipts = files.map((f) => ({ path: `${WEB_INBOX}/${entry.uid}/${f.filename}`, filename: f.filename, isPDF: f.isPDF }));
+
+    if (live) {
+      button.textContent = 'Checking token…';
+      await checkWriteAccess(token);
+      if (!state.writeToken) saveWriteToken(token, $('a-remember').checked);
+      // Receipts first, the payment last: the phone takes a payment file to
+      // mean its receipts are already there.
+      for (const [i, f] of files.entries()) {
+        button.textContent = `Uploading receipt ${i + 1} of ${files.length}…`;
+        await putFile(token, entry.receipts[i].path, f.base64, `Receipt from the website: ${merchant}`);
+      }
+      button.textContent = 'Sending…';
+      await putFile(token, `${WEB_INBOX}/${entry.uid}.json`, textToBase64(JSON.stringify(entry, null, 2)),
+        `Added on the website: ${money(amount, entry.currency)} to ${merchant}`);
+      state.sent.push({ entry, previews: files.map((f) => (f.isPDF ? null : URL.createObjectURL(f.blob))) });
+      saveSent();
+      state.firstSeen.set(entry.uid, Date.now());
+    } else {
+      state.sampleAdded.push({ entry, previews: files.map((f) => f.thumb || null) });
+      saveSamples();
+      state.firstSeen.set(entry.uid, Date.now());
+    }
+    $('add').close();
+    state.tab = { work: 'expenses', pending: 'inbox', personal: 'all' }[entry.status];
+    rederive();
+    openDetail(entry.uid);
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) forgetWriteToken();
+    addError(err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = live ? 'Send to phone' : 'Add sample payment';
+  }
+}
+
+/** Photos are scaled to MAX_IMAGE_EDGE as JPEG; a photo the browser can't
+    open (HEIC outside Safari) and PDFs go up as they are. */
+async function prepareReceipt(file, index, live) {
+  const stem = slug(file.name.replace(/\.[^.]+$/, '')).slice(0, 40) || 'receipt';
+  const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  let blob = file;
+  let ext = (file.name.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] || (isPDF ? 'pdf' : 'jpg')).toLowerCase();
+  let thumb = null;
+  if (!isPDF) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      blob = await drawJPEG(bitmap, MAX_IMAGE_EDGE, 0.85);
+      ext = 'jpg';
+      if (!live) thumb = await blobToDataURL(await drawJPEG(bitmap, 480, 0.7));
+      bitmap.close?.();
+    } catch {
+      if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is over 10 MB and this browser can't shrink it. Attach a JPEG or PNG.`);
+    }
+  }
+  return {
+    filename: `${index + 1}-${stem}.${ext}`,
+    isPDF,
+    blob,
+    thumb,
+    base64: live ? (await blobToDataURL(blob)).split(',')[1] : '',
+  };
+}
+
+function drawJPEG(bitmap, maxEdge, quality) {
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Couldn’t read that image.'))), 'image/jpeg', quality));
+}
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Couldn’t read that file.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function textToBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+async function github(token, method, path, body) {
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    });
+  } catch {
+    throw new LoadError("Couldn't reach GitHub. Check the connection and try again.");
+  }
+  let json = null;
+  try { json = await res.json(); } catch { /* empty body */ }
+  if (res.ok) return json;
+  if (res.status === 401) throw new LoadError("GitHub didn't accept the token. It may have expired — paste a new one.", 401);
+  if (res.status === 403 || res.status === 404) {
+    throw new LoadError(`This token can't write to ${WRITE_REPO}. It needs Contents: Read and write on that repo.`, 403);
+  }
+  throw new LoadError(`GitHub answered ${res.status}${json?.message ? `: ${json.message}` : ''}.`, res.status);
+}
+
+async function checkWriteAccess(token) {
+  const repo = await github(token, 'GET', `/repos/${WRITE_REPO}`);
+  if (!repo?.permissions?.push) {
+    throw new LoadError(`This token can read ${WRITE_REPO} but not write to it. It needs Contents: Read and write.`, 403);
+  }
+}
+
+const putFile = (token, path, base64, message) => github(token, 'PUT',
+  `/repos/${WRITE_REPO}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { message, content: base64 });
 
 // ---------------------------------------------------------------- CSV
 
@@ -968,7 +1361,14 @@ function downloadCSV(payments, name) {
 function init() {
   $('refresh').append(icon('refresh'));
   $('settings').append(icon('sliders'));
+  $('add-btn').prepend(icon('plus'));
   try { state.tab = localStorage.getItem(TAB_KEY) || 'inbox'; } catch { /* default */ }
+  loadLocal();
+
+  $('add-btn').addEventListener('click', openAdd);
+  const add = $('add');
+  add.addEventListener('click', (e) => { if (e.target === add) add.close(); });
+  add.addEventListener('close', clearPicked);
 
   $('connect-form').addEventListener('submit', onConnect);
   $('demo-btn').addEventListener('click', startDemo);
