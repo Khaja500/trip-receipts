@@ -3,10 +3,10 @@ import Observation
 import SwiftData
 import UIKit
 
-/// Mirrors the store to `transactions.json` in a private GitHub repo, which
-/// the website reads. Off until a repo and token are saved in Setup. With a
-/// shared repo set as well, a work-only copy goes there too, for someone else
-/// to read with their own read-only token.
+/// Mirrors the store to `transactions.json` in a GitHub repo, which the
+/// website reads — with no token when the repo is public. Off until a repo and
+/// token are saved in Setup; the token is only for writing. With a shared repo
+/// set as well, a work-only copy goes there too, for someone else to read.
 ///
 /// The whole snapshot is rewritten after each change rather than patched: the
 /// phone is the only writer, so the latest file is always the truth and a
@@ -81,7 +81,7 @@ final class GitHubSync {
 
     var websiteLink: URL { Self.websiteLink(repo: settings.fullName) }
 
-    /// What to send whoever reads the shared repo, alongside their token.
+    /// What to send whoever reads the shared repo.
     var shareWebsiteLink: URL { Self.websiteLink(repo: settings.shareFullName) }
 
     private static func websiteLink(repo: String) -> URL {

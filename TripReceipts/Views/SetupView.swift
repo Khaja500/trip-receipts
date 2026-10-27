@@ -199,7 +199,7 @@ struct SetupView: View {
                     TextField("GitHub user", text: $syncForm.owner)
                         .multilineTextAlignment(.trailing)
                 }
-                LabeledContent("Private repo") {
+                LabeledContent("Repo") {
                     TextField("trip-receipts-data", text: $syncForm.repo)
                         .multilineTextAlignment(.trailing)
                 }
@@ -236,7 +236,7 @@ struct SetupView: View {
                             .foregroundStyle(.orange)
                     }
                     ShareLink(item: sync.shareWebsiteLink,
-                              message: Text("My work-travel expenses, live. Paste the read-only token I send separately.")) {
+                              message: Text("My work-travel expenses, live. No sign-in or token needed.")) {
                         Label("Send the work-only link", systemImage: "square.and.arrow.up")
                     }
                 }
@@ -245,12 +245,12 @@ struct SetupView: View {
             Text("Website")
         } footer: {
             Text("After every change, all payments and trips are written to transactions.json in "
-                 + "a private GitHub repo, and the website reads them from there. Receipt images "
-                 + "stay on this iPhone. Use a fine-grained token that can see only that repo, "
-                 + "with Contents set to Read and write.\n\n"
+                 + "a GitHub repo, and the website reads them from there. When the repo is public, "
+                 + "anyone with the link sees them, with no token. Receipt images stay on this "
+                 + "iPhone. The token is only for this iPhone to write: use a fine-grained token "
+                 + "that can see only that repo, with Contents set to Read and write.\n\n"
                  + "A shared repo gets only work expenses and trips, with their bank messages — "
-                 + "never waiting or personal payments. Give the same token access to it, and the "
-                 + "reader their own read-only token for that repo alone.")
+                 + "never waiting or personal payments. Give the same token access to it.")
         }
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
@@ -287,7 +287,7 @@ struct SetupView: View {
             if uploads {
                 Label("Payment messages are parsed on this iPhone", systemImage: "iphone")
                 if sync.isActive {
-                    Label("Payments and trips sync to your private repo \(sync.settings.fullName)",
+                    Label("Payments and trips sync to \(sync.settings.fullName) on GitHub",
                           systemImage: "arrow.triangle.2.circlepath")
                     if sync.settings.isSharing {
                         Label("Work expenses only are copied to \(sync.settings.shareFullName)",
