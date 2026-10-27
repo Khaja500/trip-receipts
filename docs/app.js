@@ -1,16 +1,20 @@
 'use strict';
 
 /* Trip Receipts, on the web.
-   Reads transactions.json, which the iPhone app rewrites in a private GitHub
-   repo after every change, and shows it. Read-only: the phone is the only
-   writer. Everything runs in this browser; the token is sent to
-   api.github.com and nowhere else. */
+   Reads transactions.json, which the iPhone app rewrites in a GitHub repo
+   after every change, and shows it. Read-only: the phone is the only writer.
+   With no token it reads the public work-only repo; a token, when given, is
+   sent to api.github.com and nowhere else. */
 
 const API = 'https://api.github.com';
 const DATA_PATH = 'transactions.json';
 const CONNECTION_KEY = 'tripReceipts.connection';
 const TAB_KEY = 'tripReceipts.tab';
 const POLL_MS = 30_000;
+// Without a token GitHub allows 60 calls an hour, unchanged ones included.
+const PUBLIC_POLL_MS = 90_000;
+// Khaja's work expenses: public, so anyone can open the page with no token.
+const PUBLIC_REPO = 'Khaja500/trip-receipts-shared';
 const NEW_FOR_MS = 15 * 60_000;
 const REPO_PATTERN = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
@@ -222,12 +226,10 @@ class LoadError extends Error {
 async function fetchSnapshot(connection) {
   let res;
   try {
+    const headers = { Accept: 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    if (connection.token) headers.Authorization = `Bearer ${connection.token}`;
     res = await fetch(`${API}/repos/${connection.repo}/contents/${DATA_PATH}`, {
-      headers: {
-        Authorization: `Bearer ${connection.token}`,
-        Accept: 'application/vnd.github.raw+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers,
       // Revalidate every time; an unchanged file comes back as a free 304.
       cache: 'no-cache',
     });
@@ -286,6 +288,8 @@ function derive(data) {
     personal: payments.filter((p) => p.status === 'personal'),
   };
 }
+
+const pollMs = () => (state.connection?.token ? POLL_MS : PUBLIC_POLL_MS);
 
 const isNew = (p) => {
   const seen = state.firstSeen.get(p.uid);
@@ -404,7 +408,7 @@ function startPolling() {
   state.timer = setInterval(() => {
     if (document.visibilityState === 'visible') refresh();
     else renderChrome();
-  }, POLL_MS);
+  }, pollMs());
 }
 
 async function refresh() {
@@ -477,7 +481,7 @@ function renderChrome() {
     cls = 'live';
     text = `Live · phone synced ${ago(state.snapshot.generatedAt)}`;
     title = `The phone last synced ${fmtFull.format(new Date(state.snapshot.generatedAt))}. `
-      + `Checked ${fmtTime.format(new Date(state.lastChecked))}; checks every ${POLL_MS / 1000} s.`;
+      + `Checked ${fmtTime.format(new Date(state.lastChecked))}; checks every ${pollMs() / 1000} s.`;
   } else if (live) {
     text = 'Connecting…';
   }
@@ -986,7 +990,8 @@ function init() {
 
   if (params.has('demo')) return startDemo();
   const saved = loadConnection();
-  if (saved && (!linkedRepo || linkedRepo === saved.repo)) return startLive(saved);
+  if (saved && saved.repo !== PUBLIC_REPO && (!linkedRepo || linkedRepo === saved.repo)) return startLive(saved);
+  if (!linkedRepo || linkedRepo === PUBLIC_REPO) return startLive({ repo: PUBLIC_REPO, token: '', remember: false });
   return showConnect({ repo: linkedRepo || saved?.repo || '' });
 }
 
