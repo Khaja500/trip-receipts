@@ -13,8 +13,8 @@ const TAB_KEY = 'tripReceipts.tab';
 const POLL_MS = 30_000;
 // Without a token GitHub allows 60 calls an hour, unchanged ones included.
 const PUBLIC_POLL_MS = 90_000;
-// Khaja's work expenses: public, so anyone can open the page with no token.
-const PUBLIC_REPO = 'Khaja500/trip-receipts-shared';
+// Read with no token, first readable wins: every payment, then the work-only copy.
+const PUBLIC_REPOS = ['Khaja500/trip-receipts-data', 'Khaja500/trip-receipts-shared'];
 const NEW_FOR_MS = 15 * 60_000;
 const REPO_PATTERN = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
@@ -298,16 +298,6 @@ const isNew = (p) => {
 
 // ---------------------------------------------------------------- Connection
 
-function loadConnection() {
-  for (const store of [sessionStorage, localStorage]) {
-    try {
-      const saved = JSON.parse(store.getItem(CONNECTION_KEY) || 'null');
-      if (saved?.repo && saved?.token) return saved;
-    } catch { /* storage blocked or malformed */ }
-  }
-  return null;
-}
-
 function saveConnection(connection) {
   forgetConnection();
   try {
@@ -329,7 +319,7 @@ function showConnect({ repo = '', error = '' } = {}) {
   const connected = state.mode === 'live' && state.connection;
   $('connected-as').hidden = !connected;
   $('connected-as').textContent = connected ? `Connected to ${state.connection.repo}.` : '';
-  $('f-token').placeholder = connected ? 'Saved · paste to replace' : 'github_pat_…';
+  $('f-token').placeholder = connected ? 'Saved · paste to replace' : 'Leave empty for a public repo';
   $('f-remember').checked = connected ? state.connection.remember : true;
   $('disconnect-btn').hidden = !connected;
   $('cancel-btn').hidden = !state.snapshot;
@@ -351,7 +341,6 @@ async function onConnect(event) {
   if (!token && state.connection?.repo === repo) token = state.connection.token;
 
   if (!REPO_PATTERN.test(repo)) return formError('Enter the repo as owner/name, like Khaja500/trip-receipts-data.');
-  if (!token) return formError('Paste a token that can read that repo.');
 
   const connection = { repo, token, remember: $('f-remember').checked };
   const button = $('connect-btn');
@@ -386,12 +375,36 @@ function disconnect() {
   showConnect();
 }
 
-async function startLive(connection) {
-  state.connection = connection;
+/** No token: the first public repo that answers, the linked one first. */
+async function startPublic(linkedRepo) {
+  const repos = [...new Set([linkedRepo, ...PUBLIC_REPOS])].filter((r) => r && REPO_PATTERN.test(r));
+  state.connection = { repo: repos[0], token: '', remember: false };
   state.mode = 'live';
   showDashboard();
-  await refresh();
-  if (state.snapshot) startPolling();
+  for (const repo of repos) {
+    try {
+      const text = await fetchSnapshot({ repo, token: '' });
+      state.connection = { repo, token: '', remember: false };
+      state.error = null;
+      state.lastChecked = Date.now();
+      describeSource(repo);
+      applySnapshot(text);
+      break;
+    } catch (err) {
+      state.error = err;
+      if (err.status !== 404) break;
+    }
+  }
+  if (!state.snapshot) { renderChrome(); renderLoading(); }
+  startPolling();
+}
+
+function describeSource(repo) {
+  const all = repo === PUBLIC_REPOS[0];
+  const link = h('a', { href: `https://github.com/${repo}`, target: '_blank', rel: 'noopener' }, repo);
+  $('access-text').replaceChildren(
+    `This page shows ${all ? 'all of Khaja\u2019s payments' : 'Khaja\u2019s work expenses'} live from the public repo `,
+    link, '. No token needed.');
 }
 
 async function startDemo() {
@@ -423,7 +436,8 @@ async function refresh() {
   } catch (err) {
     state.error = err;
     // Nothing loaded yet and the problem is the repo or token: back to the form.
-    if (!state.snapshot && err.status) {
+    // With no token there is nothing to fix there, so keep retrying instead.
+    if (!state.snapshot && err.status && state.connection.token) {
       state.mode = null;
       showConnect({ repo: state.connection.repo, error: err.message });
       return;
@@ -989,10 +1003,9 @@ function init() {
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 
   if (params.has('demo')) return startDemo();
-  const saved = loadConnection();
-  if (saved && saved.repo !== PUBLIC_REPO && (!linkedRepo || linkedRepo === saved.repo)) return startLive(saved);
-  if (!linkedRepo || linkedRepo === PUBLIC_REPO) return startLive({ repo: PUBLIC_REPO, token: '', remember: false });
-  return showConnect({ repo: linkedRepo || saved?.repo || '' });
+  // Tokens saved by earlier versions aren't used any more.
+  forgetConnection();
+  return startPublic(linkedRepo);
 }
 
 init();
