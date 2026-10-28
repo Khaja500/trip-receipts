@@ -54,7 +54,7 @@ struct InboxView: View {
             }
             .sheet(isPresented: $showAddPayment) { AddPaymentView() }
             .sheet(isPresented: $showPersonalHistory) {
-                PersonalHistoryView(payments: personal)
+                PersonalHistoryView()
             }
             .navigationDestination(item: $selection) { payment in
                 PaymentDetailView(payment: payment)
@@ -241,41 +241,107 @@ struct PaymentRow: View {
     }
 }
 
-/// Kept 30 days so an accidental swipe can be undone.
+/// Kept 30 days so an accidental swipe can be undone, unless deleted sooner:
+/// Select picks several to delete at once, and a left swipe deletes one.
 struct PersonalHistoryView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    let payments: [Payment]
+
+    @Query(filter: #Predicate<Payment> { $0.statusRaw == "personal" },
+           sort: \Payment.reviewedAt, order: .reverse)
+    private var payments: [Payment]
+
+    @State private var editMode = EditMode.inactive
+    @State private var selected = Set<PersistentIdentifier>()
+    /// What the confirmation will delete — the selection, or one swiped row.
+    @State private var toDelete: [Payment] = []
 
     var body: some View {
         NavigationStack {
-            List {
+            List(selection: $selected) {
                 if payments.isEmpty {
                     ContentUnavailableView("Nothing here", systemImage: "person")
                 } else {
                     Section {
-                        ForEach(payments) { payment in
+                        ForEach(payments, id: \.persistentModelID) { payment in
                             HStack {
                                 PaymentRow(payment: payment)
-                                Button("Undo") {
-                                    PaymentStore(context: context).moveToInbox(payment)
+                                if !editMode.isEditing {
+                                    Button("Undo") {
+                                        PaymentStore(context: context).moveToInbox(payment)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .font(.caption)
                                 }
-                                .buttonStyle(.bordered)
-                                .font(.caption)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    toDelete = [payment]
+                                }
                             }
                         }
                     } footer: {
-                        Text("Personal payments are deleted 30 days after you mark them.")
+                        Text("Personal payments are deleted 30 days after you mark them. "
+                             + "Delete them sooner with Select or a left swipe.")
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
             .navigationTitle("Marked personal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if !payments.isEmpty {
+                        Button(editMode.isEditing ? "Cancel" : "Select") {
+                            withAnimation {
+                                editMode = editMode.isEditing ? .inactive : .active
+                                selected.removeAll()
+                            }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                if editMode.isEditing {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button(selected.count == payments.count ? "Deselect all" : "Select all") {
+                            selected = selected.count == payments.count
+                                ? [] : Set(payments.map(\.persistentModelID))
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            toDelete = payments.filter { selected.contains($0.persistentModelID) }
+                        } label: {
+                            Text(selected.isEmpty ? "Delete" : "Delete (\(selected.count))")
+                        }
+                        .disabled(selected.isEmpty)
+                    }
+                }
+            }
+            .confirmationDialog(
+                deleteTitle,
+                isPresented: Binding(get: { !toDelete.isEmpty },
+                                     set: { if !$0 { toDelete = [] } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    let deletesAll = toDelete.count == payments.count
+                    PaymentStore(context: context).deletePersonal(toDelete)
+                    selected.subtract(toDelete.map(\.persistentModelID))
+                    toDelete = []
+                    if deletesAll { editMode = .inactive }
+                }
+            } message: {
+                Text("They're removed from this iPhone, with their receipts, and from the website "
+                     + "at the next sync. This can't be undone.")
             }
         }
+    }
+
+    private var deleteTitle: String {
+        toDelete.count == 1
+            ? "Delete this personal payment?"
+            : "Delete \(toDelete.count) personal payments?"
     }
 }

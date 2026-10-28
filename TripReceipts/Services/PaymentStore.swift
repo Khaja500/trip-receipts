@@ -332,6 +332,15 @@ struct PaymentStore {
         if !stale.isEmpty { try? context.save() }
     }
 
+    /// Deletes personal payments now rather than at the 30-day sweep, with
+    /// their receipts. The save triggers a sync, and the rewritten
+    /// `transactions.json` no longer has them. Anything not personal is left alone.
+    func deletePersonal(_ payments: [Payment]) {
+        let personal = payments.filter { $0.status == .personal }
+        for payment in personal { context.delete(payment) }
+        if !personal.isEmpty { try? context.save() }
+    }
+
     func pendingCount() -> Int {
         let descriptor = FetchDescriptor<Payment>(predicate: #Predicate { $0.statusRaw == "pending" })
         return (try? context.fetchCount(descriptor)) ?? 0
